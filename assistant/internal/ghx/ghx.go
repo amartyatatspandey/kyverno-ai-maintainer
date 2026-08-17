@@ -56,11 +56,12 @@ type prView struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+const prJSONFields = "number,title,state,body,author,authorAssociation,baseRefName,headRefOid,isDraft,mergeable,labels,files,statusCheckRollup,createdAt"
+
 // GetPRFacts fetches FRESH facts. Called by context assembly AND re-called
 // by the policy path right before ALLOW (fetch-fresh rule).
 func (c *Client) GetPRFacts(number int) (*policy.PRFacts, string, error) {
-	out, err := run("pr", "view", fmt.Sprint(number), "-R", c.Repo, "--json",
-		"number,title,state,body,author,authorAssociation,baseRefName,headRefOid,isDraft,mergeable,labels,files,statusCheckRollup,createdAt")
+	out, err := run("pr", "view", fmt.Sprint(number), "-R", c.Repo, "--json", prJSONFields)
 	if err != nil {
 		return nil, "", err
 	}
@@ -68,12 +69,17 @@ func (c *Client) GetPRFacts(number int) (*policy.PRFacts, string, error) {
 	if err := json.Unmarshal(out, &v); err != nil {
 		return nil, "", err
 	}
+	return prFactsFromView(v), v.Body, nil
+}
+
+func prFactsFromView(v prView) *policy.PRFacts {
 	f := &policy.PRFacts{
 		Number: v.Number, Title: v.Title, State: v.State,
 		AuthorLogin: normalizeBot(v.Author.Login, v.Author.IsBot), AuthorIsBot: v.Author.IsBot,
 		AuthorAssociation: v.AuthorAssociation,
 		BaseRef:           v.BaseRefName, HeadSHA: v.HeadRefOid, IsDraft: v.IsDraft,
 		Mergeable: v.Mergeable == "MERGEABLE",
+		CreatedAt: v.CreatedAt,
 	}
 	for _, l := range v.Labels {
 		f.Labels = append(f.Labels, l.Name)
@@ -82,7 +88,96 @@ func (c *Client) GetPRFacts(number int) (*policy.PRFacts, string, error) {
 		f.ChangedFiles = append(f.ChangedFiles, fl.Path)
 	}
 	f.ChecksGreen, f.ChecksPending = summarizeChecks(v.StatusCheckRollup)
-	return f, v.Body, nil
+	return f
+}
+
+func prFactsFromListJSON(raw []byte) ([]policy.PRFacts, error) {
+	var vs []prView
+	if err := json.Unmarshal(raw, &vs); err != nil {
+		return nil, err
+	}
+	out := make([]policy.PRFacts, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, *prFactsFromView(v))
+	}
+	return out, nil
+}
+
+// ListOpenPRs lists open PRs using the same JSON field set as GetPRFacts.
+func (c *Client) ListOpenPRs() ([]policy.PRFacts, error) {
+	out, err := run("pr", "list", "-R", c.Repo, "--state", "open", "--limit", "100", "--json", prJSONFields)
+	if err != nil {
+		return nil, err
+	}
+	return prFactsFromListJSON(out)
+}
+
+func issueCountFromJSON(raw []byte) (int, error) {
+	var items []struct {
+		Number int `json:"number"`
+	}
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return 0, err
+	}
+	return len(items), nil
+}
+
+// ListOpenIssuesByLabel returns the count of open issues with the given label.
+func (c *Client) ListOpenIssuesByLabel(label string) (int, error) {
+	out, err := run("issue", "list", "-R", c.Repo, "--state", "open", "--label", label,
+		"--limit", "1000", "--json", "number")
+	if err != nil {
+		return 0, err
+	}
+	return issueCountFromJSON(out)
+}
+
+type checkRunRow struct {
+	Name       string    `json:"name"`
+	Conclusion string    `json:"conclusion"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+func failureRatesFromJSON(raw []byte, since time.Time) (map[string]float64, error) {
+	var rows []checkRunRow
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	type acc struct{ fail, total int }
+	by := map[string]*acc{}
+	for _, r := range rows {
+		if r.CreatedAt.Before(since) {
+			continue
+		}
+		a := by[r.Name]
+		if a == nil {
+			a = &acc{}
+			by[r.Name] = a
+		}
+		a.total++
+		if strings.EqualFold(r.Conclusion, "failure") {
+			a.fail++
+		}
+	}
+	out := map[string]float64{}
+	for name, a := range by {
+		if a.total == 0 {
+			continue
+		}
+		out[name] = float64(a.fail) / float64(a.total)
+	}
+	return out, nil
+}
+
+// RecentCheckRunFailureRate is a coarse per-workflow failure rate over the
+// last `days` days (not per-suite; that's flaky_detection).
+func (c *Client) RecentCheckRunFailureRate(days int) (map[string]float64, error) {
+	out, err := run("run", "list", "-R", c.Repo, "--limit", "200", "--json", "conclusion,name,createdAt")
+	if err != nil {
+		return nil, err
+	}
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	return failureRatesFromJSON(out, since)
 }
 
 type prCommitsView struct {

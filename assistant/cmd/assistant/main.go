@@ -4,7 +4,7 @@
 //	assistant run --pr N --workflow dco_check    # DCO sign-off guidance
 //	assistant run --pr N --workflow welcome_bot  # first-time contributor welcome
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
-//	assistant run --issue N                      # triage flow
+//	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
 //	assistant stop              # kill running sandboxes
@@ -29,6 +29,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		cmdRun(os.Args[2:])
+	case "digest":
+		cmdDigest(os.Args[2:])
 	case "audit":
 		cmdAudit(os.Args[2:])
 	case "stop":
@@ -93,6 +95,34 @@ func cmdRun(args []string) {
 	}
 }
 
+// cmdDigest is the repo-wide weekly dashboard. No --pr/--issue target.
+// Schedulable via cron, e.g. 0 9 * * 1 assistant digest
+func cmdDigest(args []string) {
+	fs := flag.NewFlagSet("digest", flag.ExitOnError)
+	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
+	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
+	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
+	auditDir := fs.String("audit-dir", "audit", "audit directory")
+	dry := fs.Bool("dry-run", true, "do not execute mutating GitHub calls")
+	fs.Parse(args)
+
+	r, err := runtime.New(runtime.Options{
+		Repo: *repo, ConfigPath: *cfg, MapPath: *tmap, AuditDir: *auditDir,
+		DryRun: *dry,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if err := r.RunMaintainerDigest(); err != nil {
+		fatal(err)
+	}
+	ids, _ := audit.ListRuns(*auditDir)
+	if len(ids) > 0 {
+		evs, _ := audit.ReadEvents(*auditDir, ids[len(ids)-1])
+		fmt.Println(audit.Render(evs))
+	}
+}
+
 func cmdAudit(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -147,6 +177,7 @@ func usage() {
 
   assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
+  assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop
 

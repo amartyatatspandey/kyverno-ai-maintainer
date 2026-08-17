@@ -270,6 +270,58 @@ func TestReviewerSuggestGoldenCases(t *testing.T) {
 	}
 }
 
+func digestCtx() Context {
+	return Context{
+		Workflow: "maintainer_digest", Repo: "amartyatatspandey/kyverno",
+		Now: time.Now(),
+	}
+}
+
+func TestMaintainerDigestGoldenCases(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	cases := []struct {
+		name    string
+		mutate  func(*Context)
+		allowed bool
+		rule    string
+	}{
+		{"happy_path", func(*Context) {}, true, ""},
+		{"kill_switch_denies", func(c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		{"rate_limit_exceeded", func(c *Context) { c.Counters.CommentsTodayEntity = 2 }, false, "comment_budget"},
+		{"wrong_workflow_denied", func(c *Context) { c.Workflow = "reviewer_suggest" }, false, "digest_workflow"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := digestCtx()
+			tc.mutate(&ctx)
+			d := e.Evaluate(Action{Type: ActionCommentDigest, Target: "digest/2026-W33"}, ctx)
+			if d.Allowed != tc.allowed {
+				t.Fatalf("allowed=%v want %v; trace=%v", d.Allowed, tc.allowed, d.Rules)
+			}
+			if !tc.allowed {
+				got := ""
+				for _, r := range d.Rules {
+					if !r.Pass {
+						got = r.Rule
+						break
+					}
+				}
+				if got != tc.rule {
+					t.Fatalf("failing rule=%q want %q; trace=%v", got, tc.rule, d.Rules)
+				}
+			}
+		})
+	}
+}
+
+func TestDigestCannotMerge(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	d := e.Evaluate(Action{Type: "merge_pr", Target: "pr/1"}, digestCtx())
+	if d.Allowed {
+		t.Fatal("merge_pr must be unreachable from maintainer_digest")
+	}
+}
+
 func TestLabelRules(t *testing.T) {
 	e := NewEngine(testCfg(t))
 	ctx := Context{Workflow: "issue_triage", Issue: &IssueFacts{Number: 5}, Now: time.Now()}

@@ -43,6 +43,7 @@ type PRFacts struct {
 	IsDraft           bool
 	State             string
 	AuthorAssociation string // FIRST_TIME_CONTRIBUTOR | FIRST_TIMER | CONTRIBUTOR | MEMBER | OWNER
+	CreatedAt         time.Time
 }
 
 // IssueFacts for triage actions.

@@ -169,6 +169,36 @@ func renderReviewerSuggestion(runID string, pr *policy.PRFacts, reviewers []inte
 	return b.String()
 }
 
+func renderDigest(runID string, snap digestSnapshot) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — weekly digest (%s)", escapeParam(snap.Week, 16))
+	w("")
+	w("Repo dashboard. Computed from GitHub API facts; no model involved.")
+	w("")
+	w("| Metric | Value |")
+	w("|---|---|")
+	w("| Open PRs | %d |", snap.OpenPRs)
+	w("| Median PR age | %.1f days |", snap.MedianAgeDays)
+	w("| PRs with CI not green | %d |", snap.ChecksNotGreen)
+	w("| Triage backlog | %d |", snap.TriageBacklog)
+	w("")
+	w("**Top workflow failure rates** _(last %d days, workflow-level)_:", digestFailureRateDays)
+	w("")
+	if len(snap.TopFailures) == 0 {
+		w("_no recent workflow runs_")
+	} else {
+		w("| Workflow | Failure rate |")
+		w("|---|---|")
+		for _, f := range snap.TopFailures {
+			w("| %s | %.0f%% |", escapeParam(f.Name, 80), f.Rate*100)
+		}
+	}
+	w("")
+	w("_Schedulable via cron, e.g. `0 9 * * 1 assistant digest`. Run `%s`._", runID)
+	return b.String()
+}
+
 func codeList(xs []string) string {
 	if len(xs) == 0 {
 		return "_none_"

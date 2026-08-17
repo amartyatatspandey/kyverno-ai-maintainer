@@ -44,6 +44,9 @@ type Config struct {
 		AssignableDenylist []string `yaml:"assignable_denylist"`
 		NeverRemove        []string `yaml:"never_remove"`
 	} `yaml:"labels"`
+	MaintainerDigest struct {
+		DigestIssueNumber int `yaml:"digest_issue_number"`
+	} `yaml:"maintainer_digest"`
 }
 
 // LoadConfig parses and validates. Any error must halt the assistant

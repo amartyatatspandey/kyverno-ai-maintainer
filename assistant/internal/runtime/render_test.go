@@ -87,3 +87,30 @@ func TestRenderReviewerSuggestion(t *testing.T) {
 		t.Fatal("must not imply a review request was filed")
 	}
 }
+
+func TestRenderDigest(t *testing.T) {
+	snap := digestSnapshot{
+		Week: "2026-W34", OpenPRs: 12, MedianAgeDays: 4.5,
+		TriageBacklog: 7, ChecksNotGreen: 3,
+		TopFailures: []workflowRate{
+			{Name: "conformance<script>", Rate: 0.4},
+			{Name: "lint", Rate: 0.1},
+		},
+	}
+	out := renderDigest("run-digest", snap)
+	if !strings.Contains(out, "|") || !strings.Contains(out, "Open PRs") {
+		t.Fatal("digest must be a markdown table with PR aging")
+	}
+	if !strings.Contains(out, "Triage") || !strings.Contains(out, "7") {
+		t.Fatal("must include triage backlog")
+	}
+	if !strings.Contains(out, "CI") && !strings.Contains(out, "not green") && !strings.Contains(out, "Checks") {
+		t.Fatal("must include CI health")
+	}
+	if strings.Contains(out, "<script>") {
+		t.Fatal("workflow names must be escaped")
+	}
+	if !strings.Contains(out, "2026-W34") {
+		t.Fatal("must name the ISO week")
+	}
+}

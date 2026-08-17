@@ -80,6 +80,10 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		if !evaluateReviewerSuggest(ctx, add) || !e.commentBudget(add, ctx) {
 			return d
 		}
+	case ActionCommentDigest:
+		if !evaluateMaintainerDigest(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
 	case "run_scoped_tests":
 		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
 			fmt.Sprintf("%d/%d today", ctx.Counters.SandboxRunsToday, e.cfg.RateLimits.SandboxRunsPerDay)) {
@@ -99,7 +103,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 
 func githubOp(actionType string) string {
 	switch actionType {
-	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion:
+	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest:
 		return "comment"
 	default:
 		return actionType
@@ -130,6 +134,13 @@ func evaluateWelcomeBot(ctx Context, add func(string, bool, string) bool) bool {
 // suggest is a runtime content decision, not a permission gate.
 func evaluateReviewerSuggest(ctx Context, add func(string, bool, string) bool) bool {
 	return add("reviewer_workflow", ctx.Workflow == "reviewer_suggest", "comment_reviewer_suggestion requires workflow reviewer_suggest")
+}
+
+// evaluateMaintainerDigest authorizes comment_digest against a synthetic
+// target (e.g. digest/2026-W33). Rate limit uses CommentsTodayEntity — no
+// new counter type. Content of the digest is a runtime decision.
+func evaluateMaintainerDigest(ctx Context, add func(string, bool, string) bool) bool {
+	return add("digest_workflow", ctx.Workflow == "maintainer_digest", "comment_digest requires workflow maintainer_digest")
 }
 
 func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ctx Context) bool {
