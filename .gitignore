@@ -1,0 +1,18 @@
+# OS cruft
+.DS_Store
+
+# Go build artifacts (the CLI binaries, if built locally)
+/assistant/assistant
+/assistant/eval
+/assistant/cmd/assistant/assistant
+/assistant/cmd/eval/eval
+*.test
+*.out
+
+# Local env / credentials — never commit these
+.env
+.env.*
+
+# Editor state
+.vscode/
+.idea/

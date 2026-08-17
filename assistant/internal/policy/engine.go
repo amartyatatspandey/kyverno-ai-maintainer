@@ -1,0 +1,254 @@
+package policy
+
+import (
+	"fmt"
+	"path"
+	"slices"
+	"strings"
+	"time"
+)
+
+const decisionTTL = 60 * time.Second
+
+// Engine evaluates actions against the config. It is pure: no I/O, no LLM.
+type Engine struct{ cfg *Config }
+
+func NewEngine(cfg *Config) *Engine { return &Engine{cfg: cfg} }
+
+// Evaluate runs the full rule order (POLICY_ENGINE.md). First DENY wins;
+// ALLOW requires every rule to pass. Unknown action/workflow => DENY.
+func (e *Engine) Evaluate(a Action, ctx Context) Decision {
+	d := Decision{ExpiresAt: ctx.Now.Add(decisionTTL)}
+	add := func(rule string, pass bool, reason string) bool {
+		d.Rules = append(d.Rules, RuleResult{Rule: rule, Pass: pass, Reason: reason})
+		return pass
+	}
+
+	// 1–2. global enable, workflow enable, kill switch
+	if !add("assistant_enabled", e.cfg.Enabled, "enabled flag in config") {
+		return d
+	}
+	wf, ok := e.cfg.Workflows[ctx.Workflow]
+	if !add("workflow_known", ok, fmt.Sprintf("workflow %q declared in config", ctx.Workflow)) {
+		return d
+	}
+	if !add("workflow_enabled", wf.Enabled, ctx.Workflow) {
+		return d
+	}
+	if !add("kill_switch_off", !ctx.KillSwitch, "repo variable "+e.cfg.KillSwitch.RepoVariable) {
+		return d
+	}
+	if labels := ctx.entityLabels(); slices.Contains(labels, e.cfg.KillSwitch.Label) || slices.Contains(labels, "hold") {
+		add("no_hold_label", false, "entity carries hold/"+e.cfg.KillSwitch.Label)
+		return d
+	}
+	add("no_hold_label", true, "no hold labels on entity")
+
+	// 3. action allowed for workflow. Specialized comment_* actions consume
+	// the workflow's "comment" github_op (github_ops lists the capability,
+	// not every template id).
+	allowedOps := e.cfg.GitHubOps[ctx.Workflow]
+	op := githubOp(a.Type)
+	opAllowed := slices.Contains(allowedOps, op) || a.Type == "run_scoped_tests"
+	if !add("action_allowed_for_workflow", opAllowed,
+		fmt.Sprintf("%s ∈ %v", a.Type, allowedOps)) {
+		return d
+	}
+
+	switch a.Type {
+	case "merge_pr":
+		if !e.mergeRules(&d, add, ctx) {
+			return d
+		}
+	case "set_labels":
+		if !e.labelRules(&d, add, a, ctx) {
+			return d
+		}
+	case "comment":
+		if !e.commentBudget(add, ctx) {
+			return d
+		}
+	case ActionCommentDCOGuidance:
+		if !evaluateDCOCheck(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
+	case ActionCommentWelcome:
+		if !evaluateWelcomeBot(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
+	case "run_scoped_tests":
+		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
+			fmt.Sprintf("%d/%d today", ctx.Counters.SandboxRunsToday, e.cfg.RateLimits.SandboxRunsPerDay)) {
+			return d
+		}
+	default:
+		add("action_known", false, "unknown action type "+a.Type)
+		return d
+	}
+
+	d.Allowed = true
+	if ctx.PR != nil {
+		d.BoundSHA = ctx.PR.HeadSHA
+	}
+	return d
+}
+
+func githubOp(actionType string) string {
+	switch actionType {
+	case ActionCommentDCOGuidance, ActionCommentWelcome:
+		return "comment"
+	default:
+		return actionType
+	}
+}
+
+func (e *Engine) commentBudget(add func(string, bool, string) bool, ctx Context) bool {
+	return add("comment_budget", ctx.Counters.CommentsTodayEntity < e.cfg.RateLimits.CommentsPerEntityPerDay,
+		fmt.Sprintf("%d/%d today on entity", ctx.Counters.CommentsTodayEntity, e.cfg.RateLimits.CommentsPerEntityPerDay))
+}
+
+// evaluateDCOCheck authorizes comment_dco_guidance. SignedOff is not consulted
+// — whether guidance is *needed* is a runtime content decision.
+func evaluateDCOCheck(ctx Context, add func(string, bool, string) bool) bool {
+	if !add("dco_workflow", ctx.Workflow == "dco_check", "comment_dco_guidance requires workflow dco_check") {
+		return false
+	}
+	return add("commits_present", ctx.Commits != nil, "DCO check requires commit facts from git trailers")
+}
+
+// evaluateWelcomeBot authorizes comment_welcome. First-time-contributor
+// detection is a runtime content decision, not a permission gate.
+func evaluateWelcomeBot(ctx Context, add func(string, bool, string) bool) bool {
+	return add("welcome_workflow", ctx.Workflow == "welcome_bot", "comment_welcome requires workflow welcome_bot")
+}
+
+func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ctx Context) bool {
+	pr := ctx.PR
+	if !add("pr_context_present", pr != nil, "merge requires PR facts") {
+		return false
+	}
+	am := e.cfg.AutoMerge
+	if !add("author_allowlisted", slices.Contains(am.AllowedAuthors, pr.AuthorLogin) && pr.AuthorIsBot,
+		fmt.Sprintf("author=%s bot=%v (API author type, not title heuristics)", pr.AuthorLogin, pr.AuthorIsBot)) {
+		return false
+	}
+	if !add("update_type_allowed", slices.Contains(am.UpdateTypes, pr.UpdateType),
+		fmt.Sprintf("update=%s ∈ %v", pr.UpdateType, am.UpdateTypes)) {
+		return false
+	}
+	if !add("base_branch_allowed", slices.Contains(e.cfg.Branches.MergeTargetsAllowed, pr.BaseRef), "base="+pr.BaseRef) {
+		return false
+	}
+	// 5. protected paths — evaluated BEFORE the changed-files allowlist and wins.
+	if hit := firstMatch(pr.ChangedFiles, e.cfg.ProtectedPaths); hit != "" {
+		add("no_protected_paths", false, "touches protected path: "+hit)
+		return false
+	}
+	add("no_protected_paths", true, "no protected paths in diff")
+	if bad := firstNotMatching(pr.ChangedFiles, am.ChangedFilesMustMatch); bad != "" {
+		add("changed_files_allowlisted", false, "file outside allowlist: "+bad)
+		return false
+	}
+	add("changed_files_allowlisted", true, fmt.Sprintf("%d files ⊆ allowed globs", len(pr.ChangedFiles)))
+	if !add("checks_green", pr.ChecksGreen && !pr.ChecksPending, "all required checks green, none pending") {
+		return false
+	}
+	if !add("mergeable", pr.Mergeable && !pr.IsDraft && pr.State == "OPEN", "mergeable, non-draft, open") {
+		return false
+	}
+	if l := intersect(pr.Labels, am.DenyLabels); len(l) > 0 {
+		add("no_deny_labels", false, "labels: "+strings.Join(l, ","))
+		return false
+	}
+	add("no_deny_labels", true, "labels ∩ deny = ∅")
+	if !add("merge_budget", ctx.Counters.MergesToday < e.cfg.RateLimits.MergesPerDay,
+		fmt.Sprintf("%d/%d today", ctx.Counters.MergesToday, e.cfg.RateLimits.MergesPerDay)) {
+		return false
+	}
+	return true
+}
+
+func (e *Engine) labelRules(d *Decision, add func(string, bool, string) bool, a Action, ctx Context) bool {
+	adds, _ := a.Params["add"].([]string)
+	removes, _ := a.Params["remove"].([]string)
+	for _, l := range adds {
+		if matchesAny(l, e.cfg.Labels.AssignableDenylist) {
+			add("label_assignable", false, "label in denylist: "+l)
+			return false
+		}
+	}
+	add("label_assignable", true, "adds outside denylist")
+	for _, l := range removes {
+		if matchesAny(l, e.cfg.Labels.NeverRemove) {
+			add("label_removable", false, "never_remove label: "+l)
+			return false
+		}
+	}
+	add("label_removable", true, "removes outside never_remove")
+	return add("label_budget", ctx.Counters.LabelOpsTodayEntity < e.cfg.RateLimits.LabelOpsPerEntityPerDay,
+		fmt.Sprintf("%d/%d today on entity", ctx.Counters.LabelOpsTodayEntity, e.cfg.RateLimits.LabelOpsPerEntityPerDay))
+}
+
+func (ctx Context) entityLabels() []string {
+	if ctx.PR != nil {
+		return ctx.PR.Labels
+	}
+	if ctx.Issue != nil {
+		return ctx.Issue.Labels
+	}
+	return nil
+}
+
+// glob matching: supports ** via path.Match on segments + prefix fallback.
+func globMatch(pattern, file string) bool {
+	if pattern == file {
+		return true
+	}
+	if strings.HasSuffix(pattern, "/**") {
+		return strings.HasPrefix(file, strings.TrimSuffix(pattern, "**"))
+	}
+	if strings.HasPrefix(pattern, "**/") {
+		base := strings.TrimPrefix(pattern, "**/")
+		ok, _ := path.Match(base, path.Base(file))
+		return ok || strings.HasSuffix(file, "/"+base)
+	}
+	ok, _ := path.Match(pattern, file)
+	return ok
+}
+
+func matchesAny(s string, patterns []string) bool {
+	for _, p := range patterns {
+		if globMatch(p, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstMatch(files, patterns []string) string {
+	for _, f := range files {
+		if matchesAny(f, patterns) {
+			return f
+		}
+	}
+	return ""
+}
+
+func firstNotMatching(files, patterns []string) string {
+	for _, f := range files {
+		if !matchesAny(f, patterns) {
+			return f
+		}
+	}
+	return ""
+}
+
+func intersect(a, b []string) []string {
+	var out []string
+	for _, x := range a {
+		if slices.Contains(b, x) {
+			out = append(out, x)
+		}
+	}
+	return out
+}

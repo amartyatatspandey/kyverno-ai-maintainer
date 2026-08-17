@@ -1,0 +1,30 @@
+# Path→test-suite map for kyverno/kyverno (the Phase-0 metadata the brief asks for).
+# Suites are directory names under test/conformance/chainsaw/ (verified against the
+# repo checkout; CI runs one job per suite via tests-path, so suite == CI shard).
+# This file is DATA, maintained like code. Unmapped changed files => full-suite fallback.
+
+version: 1
+
+# Changed-path prefix (longest match wins) → chainsaw suites.
+paths:
+  "go.mod":                    { suites: ["assert"] }            # lockfile-only: smoke suite
+  "go.sum":                    { suites: ["assert"] }
+  "api/":                      { suites: ["policy-validation", "assert"] }
+  "pkg/engine/":               { suites: ["assert", "mutate", "generate"] }
+  "pkg/webhooks/":             { suites: ["assert", "mutate", "policy-validation"] }
+  "pkg/cel/":                  { suites: ["cel"] }
+  "pkg/autogen/":              { suites: ["autogen"] }
+  "pkg/exceptions/":           { suites: ["exceptions"] }
+  "pkg/globalcontext/":        { suites: ["globalcontext"] }
+  "pkg/event/":                { suites: ["events"] }
+  "pkg/policy/":               { suites: ["policy-validation"] }
+  "pkg/background/":           { suites: ["background-only", "generate"] }
+  "pkg/controllers/cleanup/":  { suites: ["cleanup"] }
+  "pkg/controllers/":          { suites: ["assert", "generate"] }
+  "cmd/cli/":                  { suites: ["cli"] }
+  "pkg/cli/":                  { suites: ["cli"] }
+  "test/conformance/chainsaw/": { suites: ["__self__"] }  # changed suite dir => that suite
+  # Paths that intentionally map to NO conformance suites (other CI covers them):
+  "docs/":                     { suites: [] }
+  ".github/":                  { suites: [] }
+  "charts/":                   { suites: [] }   # helm-test target covers charts

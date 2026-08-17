@@ -1,0 +1,949 @@
+[
+ {
+  "base": "main",
+  "createdAt": "2026-08-13T06:35:40Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-13T14:39:09Z",
+  "number": 17118,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.08.10.1 to 2026.08.10.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-11T06:34:55Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-11T08:08:40Z",
+  "number": 17067,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/google/cel-go from 0.30.0 to 0.31.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-11T06:34:36Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-12T07:48:21Z",
+  "number": 17066,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.08.03.2 to 2026.08.10.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-11T06:33:59Z",
+  "files": [
+   ".github/workflows/check-sha-pinned-actions.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-11T08:46:15Z",
+  "number": 17065,
+  "state": "MERGED",
+  "title": "chore(deps): bump zgosalvez/github-actions-ensure-sha-pinned-actions from 5.0.6 to 5.0.7"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-10T06:36:35Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-10T07:33:59Z",
+  "number": 17009,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/google/go-containerregistry from 0.21.8 to 0.21.9"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-10T06:36:27Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-10T07:50:45Z",
+  "number": 17008,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/sigstore/cosign/v3 from 3.1.2 to 3.1.3"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-10T06:36:21Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:S",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-10T07:13:58Z",
+  "number": 17007,
+  "state": "MERGED",
+  "title": "chore(deps): bump the otel group across 1 directory with 10 updates"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-10T06:36:04Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-10T07:02:20Z",
+  "number": 17006,
+  "state": "MERGED",
+  "title": "chore(deps): bump fluxcd/flux2/action from 2.9.3 to 2.9.4"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-07T06:34:51Z",
+  "files": [
+   ".github/workflows/scan-scorecard.yaml",
+   ".github/workflows/scan-semgrep.yaml",
+   ".github/workflows/scan-trivy.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-07T15:00:53Z",
+  "number": 16966,
+  "state": "MERGED",
+  "title": "chore(deps): bump github/codeql-action/upload-sarif from 4.37.5 to 4.37.6"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-07T06:34:08Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:S",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16965,
+  "state": "CLOSED",
+  "title": "chore(deps): bump the otel group across 1 directory with 9 updates",
+  "closed_by": "dependabot[bot]",
+  "closure_cause": "superseded"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-06T06:36:39Z",
+  "files": [
+   ".github/workflows/scan-scorecard.yaml",
+   ".github/workflows/scan-semgrep.yaml",
+   ".github/workflows/scan-trivy.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-06T23:19:58Z",
+  "number": 16958,
+  "state": "MERGED",
+  "title": "chore(deps): bump github/codeql-action/upload-sarif from 4.37.4 to 4.37.5"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-06T06:34:52Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-06T17:38:35Z",
+  "number": 16957,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.08.03.1 to 2026.08.03.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-04T06:34:18Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-05T13:12:07Z",
+  "number": 16937,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/sigstore/sigstore from 1.10.8 to 1.10.9"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-04T06:34:13Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-05T07:23:01Z",
+  "number": 16936,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/google/go-containerregistry from 0.21.7 to 0.21.8"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-04T06:33:55Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:M",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-05T07:50:15Z",
+  "number": 16935,
+  "state": "MERGED",
+  "title": "chore(deps): bump the sigstore group across 1 directory with 4 updates"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-04T06:33:33Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-05T06:51:37Z",
+  "number": 16934,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.07.29.1 to 2026.08.03.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-04T06:33:10Z",
+  "files": [
+   ".github/workflows/check-sha-pinned-actions.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-05T06:41:46Z",
+  "number": 16933,
+  "state": "MERGED",
+  "title": "chore(deps): bump zgosalvez/github-actions-ensure-sha-pinned-actions from 5.0.4 to 5.0.6"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-03T06:38:59Z",
+  "files": [
+   ".github/workflows/periodic-cleanup.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-03T10:01:09Z",
+  "number": 16914,
+  "state": "MERGED",
+  "title": "chore(deps): bump cbrgm/cleanup-stale-branches-action from 1.2.11 to 1.2.12"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-03T06:36:39Z",
+  "files": [
+   ".github/workflows/scan-scorecard.yaml",
+   ".github/workflows/scan-semgrep.yaml",
+   ".github/workflows/scan-trivy.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-08-03T07:35:37Z",
+  "number": 16913,
+  "state": "MERGED",
+  "title": "chore(deps): bump github/codeql-action/upload-sarif from 4.37.3 to 4.37.4"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-08-03T06:34:44Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:M",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-08-03T10:15:35Z",
+  "number": 16912,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/sigstore/sigstore-go from 1.2.2 to 1.3.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-30T06:33:49Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-31T06:23:30Z",
+  "number": 16837,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/go-git/go-git/v5 from 5.18.0 to 5.19.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-30T06:33:38Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-31T06:33:31Z",
+  "number": 16836,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.07.20.1 to 2026.07.29.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-30T06:33:34Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-31T07:27:42Z",
+  "number": 16835,
+  "state": "MERGED",
+  "title": "chore(deps): bump google.golang.org/grpc from 1.82.1 to 1.83.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-30T06:33:08Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-31T06:44:16Z",
+  "number": 16834,
+  "state": "MERGED",
+  "title": "chore(deps): bump docker/login-action from 4.5.2 to 4.6.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-29T06:33:15Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-30T03:07:08Z",
+  "number": 16818,
+  "state": "MERGED",
+  "title": "chore(deps): bump docker/login-action from 4.5.1 to 4.5.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-28T06:33:45Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-28T14:10:27Z",
+  "number": 16802,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/aptible/supercronic from 0.2.47 to 0.2.48"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-27T06:34:54Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16771,
+  "state": "CLOSED",
+  "title": "chore(deps): bump github.com/go-git/go-billy/v5 from 5.8.0 to 5.9.1",
+  "closed_by": "github-actions[bot]",
+  "closure_cause": "rate_limiter"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-27T06:34:32Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-27T07:41:19Z",
+  "number": 16770,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/prometheus/client_golang from 1.23.2 to 1.24.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-27T06:34:27Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16769,
+  "state": "CLOSED",
+  "title": "chore(deps): bump go.yaml.in/yaml/v3 from 3.0.4 to 3.0.5",
+  "closed_by": "github-actions[bot]",
+  "closure_cause": "rate_limiter"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-27T06:34:18Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16768,
+  "state": "CLOSED",
+  "title": "chore(deps): bump github.com/google/cel-go from 0.29.2 to 0.30.0",
+  "closed_by": "realshuting",
+  "closure_cause": "human_rejection"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-27T06:33:50Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-27T07:54:01Z",
+  "number": 16767,
+  "state": "MERGED",
+  "title": "chore(deps): bump docker/login-action from 4.1.0 to 4.5.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:35:07Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:M",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-27T08:33:15Z",
+  "number": 16738,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/sigstore/cosign/v3 from 3.0.6 to 3.1.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:34:19Z",
+  "files": [
+   "go.mod",
+   "go.sum",
+   "hack/api-group-resources/go.mod",
+   "hack/api-group-resources/go.sum",
+   "hack/controller-gen/go.mod",
+   "hack/controller-gen/go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:M",
+   "kind/codegen",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-27T08:10:29Z",
+  "number": 16737,
+  "state": "MERGED",
+  "title": "chore(deps): bump the kubernetes group across 3 directories with 7 updates"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:33:55Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": null,
+  "number": 16736,
+  "state": "CLOSED",
+  "title": "chore(deps): bump docker/login-action from 4.1.0 to 4.5.0",
+  "closed_by": "dependabot[bot]",
+  "closure_cause": "superseded"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:33:38Z",
+  "files": [
+   ".github/workflows/release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-27T09:06:25Z",
+  "number": 16735,
+  "state": "MERGED",
+  "title": "chore(deps): bump fluxcd/flux2/action from 2.9.2 to 2.9.3"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:33:30Z",
+  "files": [
+   ".github/workflows/scan-scorecard.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-27T09:28:19Z",
+  "number": 16734,
+  "state": "MERGED",
+  "title": "chore(deps): bump ossf/scorecard-action from 2.4.3 to 2.4.4"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-24T06:33:24Z",
+  "files": [
+   ".github/workflows/tests-conformance.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-27T09:17:22Z",
+  "number": 16733,
+  "state": "MERGED",
+  "title": "chore(deps): bump actions/checkout from 6.0.2 to 7.0.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-23T06:34:17Z",
+  "files": [
+   "go.mod",
+   "go.sum",
+   "hack/api-group-resources/go.mod",
+   "hack/api-group-resources/go.sum",
+   "hack/controller-gen/go.mod",
+   "hack/controller-gen/go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:M",
+   "merge-conflicts",
+   "kind/codegen",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16715,
+  "state": "CLOSED",
+  "title": "chore(deps): bump the kubernetes group across 3 directories with 3 updates",
+  "closed_by": "realshuting",
+  "closure_cause": "human_rejection"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-22T06:33:12Z",
+  "files": [
+   ".github/workflows/scan-scorecard.yaml",
+   ".github/workflows/scan-semgrep.yaml",
+   ".github/workflows/scan-trivy.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-22T07:33:20Z",
+  "number": 16697,
+  "state": "MERGED",
+  "title": "chore(deps): bump github/codeql-action/upload-sarif from 4.37.1 to 4.37.3"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:34:30Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-21T09:12:56Z",
+  "number": 16684,
+  "state": "MERGED",
+  "title": "chore(deps): bump sigs.k8s.io/structured-merge-diff/v6 from 6.3.2 to 6.4.2"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:34:21Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16683,
+  "state": "CLOSED",
+  "title": "chore(deps): bump github.com/prometheus/client_golang from 1.23.2 to 1.24.0",
+  "closed_by": "github-actions[bot]",
+  "closure_cause": "rate_limiter"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:34:13Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": null,
+  "number": 16682,
+  "state": "CLOSED",
+  "title": "chore(deps): bump github.com/go-logr/logr from 1.4.3 to 1.4.4",
+  "closed_by": "github-actions[bot]",
+  "closure_cause": "rate_limiter"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:33:48Z",
+  "files": [
+   ".github/workflows/pr-rate-limiter.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-21T09:28:00Z",
+  "number": 16681,
+  "state": "MERGED",
+  "title": "chore(deps): bump Homebrew/actions/limit-pull-requests from 2026.07.13.1 to 2026.07.20.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:33:42Z",
+  "files": [
+   ".github/workflows/assign-milestone.yaml",
+   ".github/workflows/cache.yaml",
+   ".github/workflows/check-ah-lint.yaml",
+   ".github/workflows/check-cli-tests.yaml",
+   ".github/workflows/check-codegen.yaml",
+   ".github/workflows/check-ct-lint.yaml",
+   ".github/workflows/check-devcontainer.yaml",
+   ".github/workflows/check-fmt.yaml",
+   ".github/workflows/check-framework.yaml",
+   ".github/workflows/check-golangci-lint.yaml",
+   ".github/workflows/check-imports.yaml",
+   ".github/workflows/check-sha-pinned-actions.yaml",
+   ".github/workflows/check-tests.yaml",
+   ".github/workflows/check-unit-tests.yaml",
+   ".github/workflows/check-unused-package.yaml",
+   ".github/workflows/check-vet.yaml",
+   ".github/workflows/cherry-pick-on-merge.yaml",
+   ".github/workflows/comment-cherry-pick.yaml",
+   ".github/workflows/comment-conformance.yaml",
+   ".github/workflows/helm-release.yaml",
+   ".github/workflows/images-publish.yaml",
+   ".github/workflows/periodic-cleanup.yaml",
+   ".github/workflows/periodic-trivy.yaml",
+   ".github/workflows/pr-labelling.yaml",
+   ".github/workflows/release.yaml",
+   ".github/workflows/scan-fossa.yml",
+   ".github/workflows/scan-scorecard.yaml",
+   ".github/workflows/scan-semgrep.yaml",
+   ".github/workflows/scan-sonarcloud.yaml",
+   ".github/workflows/scan-trivy.yaml",
+   ".github/workflows/sync-label-colors.yaml",
+   ".github/workflows/tests-conformance-policy-library.yaml",
+   ".github/workflows/tests-conformance.yaml",
+   ".github/workflows/tests-k6.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-22T07:16:18Z",
+  "number": 16680,
+  "state": "MERGED",
+  "title": "chore(deps): bump actions/checkout from 6.0.2 to 7.0.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-21T06:33:09Z",
+  "files": [
+   ".github/workflows/pr-labelling.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-22T06:53:43Z",
+  "number": 16679,
+  "state": "MERGED",
+  "title": "chore(deps): bump actions/labeler from 6.2.0 to 7.0.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-20T06:35:00Z",
+  "files": [
+   "hack/controller-gen/go.mod",
+   "hack/controller-gen/go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:S",
+   "kind/codegen"
+  ],
+  "mergedAt": null,
+  "number": 16671,
+  "state": "CLOSED",
+  "title": "chore(deps): bump sigs.k8s.io/controller-tools from 0.20.1 to 0.21.0 in /hack/controller-gen",
+  "closed_by": "dependabot[bot]",
+  "closure_cause": "superseded"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-20T06:34:53Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-20T10:58:54Z",
+  "number": 16670,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/onsi/gomega from 1.40.0 to 1.42.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-20T06:34:29Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-20T10:43:20Z",
+  "number": 16669,
+  "state": "MERGED",
+  "title": "chore(deps): bump google.golang.org/grpc from 1.82.0 to 1.82.1"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-20T06:33:38Z",
+  "files": [
+   ".github/workflows/check-ct-lint.yaml",
+   ".github/workflows/helm-release.yaml"
+  ],
+  "labels": [
+   "dependencies",
+   "github_actions",
+   "size:XS",
+   "kind/ci"
+  ],
+  "mergedAt": "2026-07-21T15:59:19Z",
+  "number": 16668,
+  "state": "MERGED",
+  "title": "chore(deps): bump actions/setup-python from 6.2.0 to 7.0.0"
+ },
+ {
+  "base": "main",
+  "createdAt": "2026-07-17T06:33:48Z",
+  "files": [
+   "go.mod",
+   "go.sum"
+  ],
+  "labels": [
+   "dependencies",
+   "go",
+   "size:XS",
+   "kind/dependencies"
+  ],
+  "mergedAt": "2026-07-19T19:00:09Z",
+  "number": 16621,
+  "state": "MERGED",
+  "title": "chore(deps): bump github.com/dgraph-io/ristretto/v2 from 2.4.0 to 2.4.2"
+ }
+]

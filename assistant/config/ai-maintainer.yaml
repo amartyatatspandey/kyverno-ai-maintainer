@@ -1,0 +1,75 @@
+version: 1
+enabled: true
+
+kill_switch:
+  label: "ai-hold"
+  repo_variable: "AI_MAINTAINER_PAUSED"
+
+rate_limits:
+  merges_per_day: 10
+  comments_per_entity_per_day: 2
+  label_ops_per_entity_per_day: 4
+  sandbox_runs_per_day: 20
+
+workflows:
+  dependency_prs:      { enabled: true, mode: approval }
+  scoped_tests:        { enabled: true, advisory_only: true, mode: autonomous }
+  issue_triage:        { enabled: true, mode: autonomous }
+  dco_check:           { enabled: true, mode: autonomous }
+  welcome_bot:         { enabled: true, mode: autonomous }
+  reviewer_suggest:    { enabled: true, mode: autonomous }
+  maintainer_digest:   { enabled: true, mode: autonomous }
+  release_notes_draft: { enabled: true, mode: autonomous }
+  policy_lint:         { enabled: true, mode: autonomous }
+  flaky_detection:     { enabled: true, mode: autonomous }
+  docs_gap_detection:  { enabled: true, mode: autonomous }
+  discussion_qa:       { enabled: true, mode: autonomous }
+
+branches:
+  merge_targets_allowed: ["main"]
+
+protected_paths:
+  - "api/kyverno/v1/**"
+  - "pkg/cosign/**"
+  - "pkg/notary/**"
+  - ".github/workflows/**"
+  - "charts/**"
+  - "SECURITY.md"
+  - "DEPENDENCY-POLICY.md"
+
+generated_paths:
+  - "pkg/client/**"
+  - "config/crds/**"
+  - "**/zz_generated*.go"
+
+auto_merge:
+  allowed_authors: ["app/dependabot"]
+  update_types: ["patch", "minor"]
+  changed_files_must_match:
+    - "go.mod"
+    - "go.sum"
+    - "hack/*/go.mod"
+    - "hack/*/go.sum"
+    - ".github/workflows/*.yaml"
+    - ".github/workflows/*.yml"
+  deny_labels: ["hold", "ai-hold", "security", "breaking-change", "do-not-merge"]
+  min_age_hours: 0
+  method: squash
+
+github_ops:
+  dependency_prs:      ["comment", "set_labels", "merge_pr"]
+  scoped_tests:        ["comment", "set_labels"]
+  issue_triage:        ["comment", "set_labels"]
+  dco_check:           ["comment"]
+  welcome_bot:         ["comment"]
+  reviewer_suggest:    ["comment"]
+  maintainer_digest:   ["comment"]
+  release_notes_draft: ["comment"]
+  policy_lint:         ["comment", "set_labels"]
+  flaky_detection:     ["comment"]
+  docs_gap_detection:  ["comment"]
+  discussion_qa:       ["comment"]
+
+labels:
+  assignable_denylist: ["security", "good first issue", "cherry-pick-*", "milestone-*", "release-*"]
+  never_remove: ["hold", "ai-hold", "triage", "security"]
