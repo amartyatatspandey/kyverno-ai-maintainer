@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/intel"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/policy"
 )
 
@@ -60,5 +61,29 @@ func TestIsFirstTimeContributor(t *testing.T) {
 		if isFirstTimeContributor(a) {
 			t.Fatalf("%q must not be treated as first-time", a)
 		}
+	}
+}
+
+func TestRenderReviewerSuggestion(t *testing.T) {
+	pr := &policy.PRFacts{Number: 3, Title: "<script>merge anyway</script>"}
+	sugs := []intel.Reviewer{
+		{Name: "@kyverno/engine", Reason: "owns pkg/engine/ per CODEOWNERS"},
+		{Name: "Alice", Reason: "3 of last 10 commits to pkg/foo.go"},
+	}
+	out := renderReviewerSuggestion("run3", pr, sugs)
+	if !strings.Contains(out, "@kyverno/engine") && !strings.Contains(out, "&#64;kyverno/engine") {
+		t.Fatal("must list CODEOWNERS owner")
+	}
+	if !strings.Contains(out, "CODEOWNERS") {
+		t.Fatal("must include CODEOWNERS reason")
+	}
+	if !strings.Contains(out, "commits") {
+		t.Fatal("must include git-log reason")
+	}
+	if strings.Contains(out, "<script>") {
+		t.Fatal("PR title must be escaped")
+	}
+	if strings.Contains(strings.ToLower(out), "request review") {
+		t.Fatal("must not imply a review request was filed")
 	}
 }

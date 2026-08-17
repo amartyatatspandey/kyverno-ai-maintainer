@@ -173,6 +173,25 @@ func relDir(root, dir string) (string, error) {
 	return "./" + rel, nil
 }
 
+// globMatch is the path matcher used by test-map prefixes' glob forms and by
+// CODEOWNERS. Same rules as policy.globMatch: exact, /** prefix, **/ basename,
+// then path.Match. CODEOWNERS reuses this rather than a second matcher.
+func globMatch(pattern, file string) bool {
+	if pattern == file {
+		return true
+	}
+	if strings.HasSuffix(pattern, "/**") {
+		return strings.HasPrefix(file, strings.TrimSuffix(pattern, "**"))
+	}
+	if strings.HasPrefix(pattern, "**/") {
+		base := strings.TrimPrefix(pattern, "**/")
+		ok, _ := path.Match(base, path.Base(file))
+		return ok || strings.HasSuffix(file, "/"+base)
+	}
+	ok, _ := path.Match(pattern, file)
+	return ok
+}
+
 func keys(m map[string]bool) []string {
 	var out []string
 	for k := range m {

@@ -150,6 +150,25 @@ func renderWelcome(runID string, pr *policy.PRFacts) string {
 	return b.String()
 }
 
+func renderReviewerSuggestion(runID string, pr *policy.PRFacts, reviewers []intel.Reviewer) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — suggested reviewers")
+	w("")
+	w("These are **suggestions only**. The assistant never files a GitHub review request — a maintainer can act on this list manually.")
+	if pr != nil && pr.Title != "" {
+		w("")
+		w("PR: #%d — %s", pr.Number, escapeParam(pr.Title, 200))
+	}
+	w("")
+	for _, r := range reviewers {
+		w("- %s — %s", escapeParam(r.Name, 80), escapeParam(r.Reason, 200))
+	}
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
 func codeList(xs []string) string {
 	if len(xs) == 0 {
 		return "_none_"

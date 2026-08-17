@@ -76,6 +76,10 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		if !evaluateWelcomeBot(ctx, add) || !e.commentBudget(add, ctx) {
 			return d
 		}
+	case ActionCommentReviewerSuggestion:
+		if !evaluateReviewerSuggest(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
 	case "run_scoped_tests":
 		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
 			fmt.Sprintf("%d/%d today", ctx.Counters.SandboxRunsToday, e.cfg.RateLimits.SandboxRunsPerDay)) {
@@ -95,7 +99,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 
 func githubOp(actionType string) string {
 	switch actionType {
-	case ActionCommentDCOGuidance, ActionCommentWelcome:
+	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion:
 		return "comment"
 	default:
 		return actionType
@@ -120,6 +124,12 @@ func evaluateDCOCheck(ctx Context, add func(string, bool, string) bool) bool {
 // detection is a runtime content decision, not a permission gate.
 func evaluateWelcomeBot(ctx Context, add func(string, bool, string) bool) bool {
 	return add("welcome_workflow", ctx.Workflow == "welcome_bot", "comment_welcome requires workflow welcome_bot")
+}
+
+// evaluateReviewerSuggest authorizes comment_reviewer_suggestion. Who to
+// suggest is a runtime content decision, not a permission gate.
+func evaluateReviewerSuggest(ctx Context, add func(string, bool, string) bool) bool {
+	return add("reviewer_workflow", ctx.Workflow == "reviewer_suggest", "comment_reviewer_suggestion requires workflow reviewer_suggest")
 }
 
 func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ctx Context) bool {

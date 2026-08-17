@@ -3,6 +3,7 @@
 //	assistant run --pr N                         # dependency-PR flow
 //	assistant run --pr N --workflow dco_check    # DCO sign-off guidance
 //	assistant run --pr N --workflow welcome_bot  # first-time contributor welcome
+//	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
 //	assistant run --issue N                      # triage flow
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
@@ -44,7 +45,7 @@ func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	pr := fs.Int("pr", 0, "pull request number")
 	issue := fs.Int("issue", 0, "issue number (triage flow)")
-	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot")
+	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot, reviewer_suggest")
 	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
 	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
 	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
@@ -73,8 +74,10 @@ func cmdRun(args []string) {
 			err = r.RunDCOCheck(ctx, *pr)
 		case "welcome_bot":
 			err = r.RunWelcomeBot(ctx, *pr)
+		case "reviewer_suggest":
+			err = r.RunReviewerSuggest(ctx, *pr)
 		default:
-			fatal(fmt.Errorf("unknown --workflow %q for --pr (want dependency_prs, dco_check, or welcome_bot)", *workflow))
+			fatal(fmt.Errorf("unknown --workflow %q for --pr (want dependency_prs, dco_check, welcome_bot, or reviewer_suggest)", *workflow))
 		}
 	default:
 		fatal(fmt.Errorf("need --pr N or --issue N"))
@@ -142,7 +145,7 @@ func cmdAudit(args []string) {
 func usage() {
 	fmt.Fprint(os.Stderr, `Kyverno AI Maintainer Assistant (POC)
 
-  assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
+  assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop

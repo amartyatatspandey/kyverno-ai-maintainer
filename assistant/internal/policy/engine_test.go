@@ -225,6 +225,51 @@ func TestWelcomeBotGoldenCases(t *testing.T) {
 	}
 }
 
+func reviewerCtx() Context {
+	return Context{
+		Workflow: "reviewer_suggest", Repo: "amartyatatspandey/kyverno",
+		PR:  &PRFacts{Number: 42, AuthorLogin: "alice", State: "OPEN", HeadSHA: "abc123"},
+		Now: time.Now(),
+	}
+}
+
+func TestReviewerSuggestGoldenCases(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	cases := []struct {
+		name    string
+		mutate  func(*Context)
+		allowed bool
+		rule    string
+	}{
+		{"happy_path", func(*Context) {}, true, ""},
+		{"kill_switch_denies", func(c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		{"rate_limit_exceeded", func(c *Context) { c.Counters.CommentsTodayEntity = 2 }, false, "comment_budget"},
+		{"wrong_workflow_denied", func(c *Context) { c.Workflow = "welcome_bot" }, false, "reviewer_workflow"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := reviewerCtx()
+			tc.mutate(&ctx)
+			d := e.Evaluate(Action{Type: ActionCommentReviewerSuggestion, Target: "pr/42"}, ctx)
+			if d.Allowed != tc.allowed {
+				t.Fatalf("allowed=%v want %v; trace=%v", d.Allowed, tc.allowed, d.Rules)
+			}
+			if !tc.allowed {
+				got := ""
+				for _, r := range d.Rules {
+					if !r.Pass {
+						got = r.Rule
+						break
+					}
+				}
+				if got != tc.rule {
+					t.Fatalf("failing rule=%q want %q; trace=%v", got, tc.rule, d.Rules)
+				}
+			}
+		})
+	}
+}
+
 func TestLabelRules(t *testing.T) {
 	e := NewEngine(testCfg(t))
 	ctx := Context{Workflow: "issue_triage", Issue: &IssueFacts{Number: 5}, Now: time.Now()}

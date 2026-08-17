@@ -368,6 +368,61 @@ func (r *Runner) RunWelcomeBot(ctx context.Context, number int) error {
 	return nil
 }
 
+// RunReviewerSuggest comments a suggested reviewer list from CODEOWNERS and
+// git history. It never requests reviews. No-op when the suggestion list is empty.
+func (r *Runner) RunReviewerSuggest(ctx context.Context, number int) error {
+	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "reviewer_suggest", "entity": fmt.Sprintf("pr/%d", number),
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{"tool": "github.get_pull_request", "args": number, "read_only": true})
+	pr, _, err := r.gh.GetPRFacts(number)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	reviewers, err := intel.SuggestReviewers(pr.ChangedFiles, r.opts.RepoDir)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "intel.suggest_reviewers", "error": err.Error()})
+		return err
+	}
+	log.Emit("reviewer_selection", map[string]any{
+		"count": len(reviewers), "source": "CODEOWNERS + git log fallback",
+	})
+
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "reviewer_suggest", Repo: r.opts.Repo, PR: pr,
+		RunID: runID, Counters: st.counters, KillSwitch: kill, Now: time.Now(),
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionCommentReviewerSuggestion, Target: fmt.Sprintf("pr/%d", number)}, pctx)
+	r.logDecision(st, policy.ActionCommentReviewerSuggestion, d)
+	if !d.Allowed {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentReviewerSuggestion, "reason": d.DenyReason()})
+		return nil
+	}
+	if len(reviewers) == 0 {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentReviewerSuggestion, "reason": "no reviewers suggested"})
+		return nil
+	}
+	res, err := r.gh.UpsertComment(&d, "pr", number, "reviewer-suggest", renderReviewerSuggestion(runID, pr, reviewers))
+	r.logAction(st, policy.ActionCommentReviewerSuggestion, res, err)
+	return nil
+}
+
 // ---- LLM insertion points (advisory only) ----
 
 func (r *Runner) advisorySummary(st *runState, pr *policy.PRFacts, body string) string {
