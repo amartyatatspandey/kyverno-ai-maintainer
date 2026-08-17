@@ -81,16 +81,19 @@ type Counters struct {
 // Context is everything Evaluate may consult. No free text fields:
 // untrusted content structurally cannot reach policy inputs.
 type Context struct {
-	Workflow   string // "dependency_prs" | "scoped_tests" | "issue_triage" | "dco_check" | "welcome_bot" | "reviewer_suggest" | "maintainer_digest" | "release_notes_draft" | "policy_lint" | "flaky_detection" | "docs_gap_detection" | "discussion_qa"
+	Workflow   string // "dependency_prs" | "scoped_tests" | "issue_triage" | "dco_check" | "welcome_bot" | "reviewer_suggest" | "maintainer_digest" | "release_notes_draft" | "policy_lint" | "flaky_detection" | "docs_gap_detection" | "discussion_qa" | "issue_repro"
 	Repo       string
 	PR         *PRFacts
 	Issue      *IssueFacts
 	Commits    *CommitFacts     // nil when the workflow does not inspect commits
 	Discussion *DiscussionFacts // nil when the workflow is not discussion Q&A
-	RunID      string
-	Counters   Counters
-	KillSwitch bool // repo variable, fetched fresh
-	Now        time.Time
+	// ReproBundleValid is the structured result of repro.ValidateReproBundle.
+	// The YAML itself never appears here (untrusted content cannot reach policy).
+	ReproBundleValid bool
+	RunID            string
+	Counters         Counters
+	KillSwitch       bool // repo variable, fetched fresh
+	Now              time.Time
 }
 
 // RuleResult records one rule's verdict — the full trace is the audit story.

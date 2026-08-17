@@ -336,3 +336,54 @@ func short(sha string) string {
 	}
 	return sha
 }
+
+func renderReproRejected(runID, reason string) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — repro")
+	w("")
+	w("Automated reproduction **did not run**. The issue body did not pass the YAML allowlist gate.")
+	w("")
+	w("**Reason:** %s", escapeParam(reason, 400))
+	w("")
+	w("Fix the bug-report template fields (`Kyverno Version` / `Kyverno CLI Version`, `Steps to reproduce` with two ```yaml fences, `Expected behavior`) and ensure the manifests contain no host-access or exec-style fields.")
+	w("")
+	w("_The rejected YAML is not echoed here._")
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
+func renderReproResult(runID, version, expected string, res *sandbox.ReproResult) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — repro")
+	w("")
+	if res != nil && res.Success {
+		w("Sandbox observation **matched** the expected behavior (advisory evidence, not a verdict).")
+	} else {
+		w("Sandbox observation **did not match** the expected behavior, or the run did not complete cleanly (advisory evidence, not a verdict).")
+	}
+	w("")
+	w("| | |")
+	w("|---|---|")
+	w("| Kyverno version | `%s` (pinned allowlist) |", escapeParam(version, 20))
+	actual := ""
+	logs := ""
+	if res != nil {
+		actual = res.ActualBehavior
+		logs = res.Logs
+	}
+	w("| Actual | `%s` |", escapeParam(actual, 40))
+	w("| Expected | %s |", escapeParam(expected, 200))
+	w("")
+	if logs != "" {
+		w("**Logs** _(truncated)_:")
+		w("```")
+		w("%s", escapeParam(logs, 1500))
+		w("```")
+		w("")
+	}
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}

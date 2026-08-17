@@ -6,7 +6,8 @@
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
 //	assistant run --pr N --workflow policy_lint --sandbox  # kyverno apply/test on policy-library YAML
 //	assistant run --pr N --workflow docs_gap_detection  # flag missing website-repo docs pointer
-//	assistant run --discussion N  # docs-grounded Q&A (escalates when not confident)
+//	assistant run --issue N                      # issue triage
+//	assistant run --issue N --repro [--sandbox]  # W5 automated reproduction
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
 //	assistant flaky-report      # comment flaky suite candidates (never auto-quarantines)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
@@ -55,7 +56,7 @@ func main() {
 func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	pr := fs.Int("pr", 0, "pull request number")
-	issue := fs.Int("issue", 0, "issue number (triage flow)")
+	issue := fs.Int("issue", 0, "issue number (triage flow, or --repro)")
 	discussion := fs.Int("discussion", 0, "discussion number (docs-grounded Q&A)")
 	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot, reviewer_suggest, policy_lint, docs_gap_detection")
 	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
@@ -64,7 +65,8 @@ func cmdRun(args []string) {
 	auditDir := fs.String("audit-dir", "audit", "audit directory")
 	repoDir := fs.String("repo-dir", "", "local checkout (enables import closure + sandbox)")
 	dry := fs.Bool("dry-run", true, "do not execute mutating GitHub calls")
-	sbx := fs.Bool("sandbox", false, "run scoped tests in docker sandbox")
+	sbx := fs.Bool("sandbox", false, "run scoped tests / repro in docker sandbox")
+	repro := fs.Bool("repro", false, "run automated reproduction on --issue N")
 	fs.Parse(args)
 
 	r, err := runtime.New(runtime.Options{
@@ -79,7 +81,11 @@ func cmdRun(args []string) {
 	case *discussion > 0:
 		err = r.RunDiscussionQA(ctx, *discussion)
 	case *issue > 0:
-		err = r.RunIssueTriage(ctx, *issue)
+		if *repro {
+			err = r.RunIssueRepro(ctx, *issue)
+		} else {
+			err = r.RunIssueTriage(ctx, *issue)
+		}
 	case *pr > 0:
 		switch *workflow {
 		case "", "dependency_prs":
@@ -254,6 +260,7 @@ func usage() {
 
   assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest|policy_lint|docs_gap_detection] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
+  assistant run --issue N --repro [--sandbox]  # automated KinD/CLI reproduction
   assistant run --discussion N [--repo-dir path] [--dry-run=false]  # docs-grounded Q&A
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
   assistant flaky-report [--repo owner/name] [--dry-run=false]  # flag flaky suites; never auto-quarantines

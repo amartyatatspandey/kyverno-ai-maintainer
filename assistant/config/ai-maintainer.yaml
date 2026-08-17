@@ -24,6 +24,7 @@ workflows:
   flaky_detection:     { enabled: true, mode: autonomous }
   docs_gap_detection:  { enabled: true, mode: autonomous }
   discussion_qa:       { enabled: true, mode: autonomous }
+  issue_repro:         { enabled: true, mode: autonomous }
 
 branches:
   merge_targets_allowed: ["main"]
@@ -69,10 +70,11 @@ github_ops:
   flaky_detection:     ["comment"]
   docs_gap_detection:  ["comment"]
   discussion_qa:       ["comment"]
+  issue_repro:         ["comment", "set_labels"]
 
 labels:
   assignable_denylist: ["security", "good first issue", "cherry-pick-*", "milestone-*", "release-*"]
-  assignable: ["policy-lint-passed", "policy-lint-failed"]
+  assignable: ["policy-lint-passed", "policy-lint-failed", "repro-confirmed", "repro-failed"]
   never_remove: ["hold", "ai-hold", "triage", "security"]
 
 # Pinned tracking issue the weekly digest upserts onto (one comment, edited in place).
@@ -90,3 +92,14 @@ flaky:
 discussion_qa:
   min_confidence: 0.7
   min_retrieval_score: 0.2
+
+# W5 automated reproduction. User YAML from an issue body is maximally
+# untrusted: reject unknown versions (never pull), cap size, pin images.
+repro:
+  max_yaml_bytes: 65536
+  timeout_seconds: 300
+  allowed_versions: ["1.16.4", "1.17.2", "1.18.0"]
+  # Directory of `docker save` tarballs mounted read-only into the sandbox.
+  # Empty => KinD path refuses (CLI observation with --network=none still runs
+  # if the pinned kyverno-cli image is already on the host).
+  image_cache: ""

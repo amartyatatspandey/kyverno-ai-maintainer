@@ -60,6 +60,12 @@ type Config struct {
 		MinConfidence     float64 `yaml:"min_confidence"`
 		MinRetrievalScore float64 `yaml:"min_retrieval_score"`
 	} `yaml:"discussion_qa"`
+	Repro struct {
+		MaxYAMLBytes    int      `yaml:"max_yaml_bytes"`
+		TimeoutSeconds  int      `yaml:"timeout_seconds"`
+		AllowedVersions []string `yaml:"allowed_versions"`
+		ImageCache      string   `yaml:"image_cache"`
+	} `yaml:"repro"`
 }
 
 // LoadConfig parses and validates. Any error must halt the assistant

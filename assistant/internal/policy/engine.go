@@ -49,7 +49,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 	// not every template id).
 	allowedOps := e.cfg.GitHubOps[ctx.Workflow]
 	op := githubOp(a.Type)
-	opAllowed := slices.Contains(allowedOps, op) || a.Type == "run_scoped_tests" || a.Type == ActionRunPolicyLint
+	opAllowed := slices.Contains(allowedOps, op) || a.Type == "run_scoped_tests" || a.Type == ActionRunPolicyLint || a.Type == ActionRunRepro
 	if !add("action_allowed_for_workflow", opAllowed,
 		fmt.Sprintf("%s ∈ %v", a.Type, allowedOps)) {
 		return d
@@ -98,6 +98,14 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		}
 	case ActionRunPolicyLint:
 		if !evaluateRunPolicyLint(ctx, add) {
+			return d
+		}
+		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
+			fmt.Sprintf("%d/%d today", ctx.Counters.SandboxRunsToday, e.cfg.RateLimits.SandboxRunsPerDay)) {
+			return d
+		}
+	case ActionRunRepro:
+		if !evaluateRunRepro(ctx, add) {
 			return d
 		}
 		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
@@ -227,6 +235,20 @@ func evaluateRunPolicyLint(ctx Context, add func(string, bool, string) bool) boo
 		return false
 	}
 	return add("pr_context_present", ctx.PR != nil, "policy lint requires PR facts")
+}
+
+// evaluateRunRepro authorizes KinD/CLI observation of untrusted issue YAML.
+// ReproBundleValid is a hard rule: an invalid bundle structurally cannot
+// reach the sandbox (fail-safe matching W3's unmapped-path → full-suite).
+func evaluateRunRepro(ctx Context, add func(string, bool, string) bool) bool {
+	if !add("repro_workflow", ctx.Workflow == "issue_repro", "run_repro requires workflow issue_repro") {
+		return false
+	}
+	if !add("issue_context_present", ctx.Issue != nil, "run_repro requires issue facts") {
+		return false
+	}
+	return add("repro_bundle_valid", ctx.ReproBundleValid,
+		"ValidateReproBundle must pass before the sandbox can run")
 }
 
 // PolicyLibraryPrefixes are in-repo paths that carry community/sample policies.

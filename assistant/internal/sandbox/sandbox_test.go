@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/repro"
 )
 
 func TestLintCommandKyvernoTestManifest(t *testing.T) {
@@ -54,6 +57,113 @@ func TestRunPolicyLintDockerGuard(t *testing.T) {
 	if err == nil && len(res) == 1 && res[0].Passed {
 		t.Fatal("absent docker must not report a passing lint")
 	}
+}
+
+func TestRunReproDisabled(t *testing.T) {
+	r := &Runner{Enabled: false}
+	_, err := r.RunRepro(&repro.ReproBundle{
+		PolicyYAML:     "kind: ClusterPolicy\n",
+		ResourceYAML:   "kind: Pod\n",
+		KyvernoVersion: "1.18.0",
+	})
+	if err == nil {
+		t.Fatal("disabled sandbox must refuse RunRepro")
+	}
+}
+
+func TestRunReproRefusesInvalidBundle(t *testing.T) {
+	r := &Runner{Enabled: true}
+	_, err := r.RunRepro(&repro.ReproBundle{
+		PolicyYAML: `apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: x
+spec: {}
+`,
+		ResourceYAML: `apiVersion: v1
+kind: Pod
+metadata:
+  name: x
+spec:
+  hostNetwork: true
+  containers:
+  - name: pause
+    image: pause
+`,
+		KyvernoVersion: "1.18.0",
+	})
+	if err == nil {
+		t.Fatal("hostNetwork bundle must never reach docker")
+	}
+	if !strings.Contains(err.Error(), "invalid repro bundle") {
+		t.Fatalf("want invalid-bundle refusal, got %v", err)
+	}
+}
+
+func TestReproDockerArgs_NoCacheIsNetworkNone(t *testing.T) {
+	r := &Runner{}
+	args := r.reproDockerArgs("ghcr.io/kyverno/kyverno-cli:v1.18.0", "/tmp/work")
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--network=none") {
+		t.Fatalf("CLI path must be hermetic: %v", args)
+	}
+	if !strings.Contains(joined, "--label ai-maintainer-run=true") && !containsPair(args, "--label", "ai-maintainer-run=true") {
+		t.Fatalf("missing sandbox label: %v", args)
+	}
+	if strings.Contains(joined, "policy.yaml") && strings.Contains(joined, "apiVersion") {
+		t.Fatal("user YAML must not appear on the docker argv")
+	}
+}
+
+func TestReproDockerArgs_CacheDropsNetworkNone(t *testing.T) {
+	r := &Runner{ImageCache: "/var/cache/ai-images"}
+	args := r.reproDockerArgs("ghcr.io/kyverno/kyverno-cli:v1.18.0", "/tmp/work")
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "--network=none") {
+		t.Fatal("KinD path cannot use network=none (needs local cache/docker)")
+	}
+	if !strings.Contains(joined, "/var/cache/ai-images:/image-cache:ro") {
+		t.Fatalf("cache must be mounted read-only: %v", args)
+	}
+}
+
+func TestRunReproDockerGuard(t *testing.T) {
+	if Available() {
+		t.Skip("docker present — not starting a live KinD cluster in unit tests")
+	}
+	r := &Runner{Enabled: true}
+	b := &repro.ReproBundle{
+		PolicyYAML: `apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-app-label
+spec:
+  rules: []
+`,
+		ResourceYAML: `apiVersion: v1
+kind: Pod
+metadata:
+  name: demo
+spec:
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.9
+`,
+		KyvernoVersion: "1.18.0",
+	}
+	res, err := r.RunRepro(b)
+	if err == nil && res != nil && res.Success {
+		t.Fatal("absent docker must not report a successful repro")
+	}
+}
+
+func containsPair(args []string, k, v string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == k && args[i+1] == v {
+			return true
+		}
+	}
+	return false
 }
 
 func mustWrite(t *testing.T, root, rel, body string) {

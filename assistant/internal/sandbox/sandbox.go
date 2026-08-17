@@ -14,9 +14,11 @@ import (
 )
 
 type Runner struct {
-	Image   string // pinned digest in production; tag for POC
-	RepoDir string // read-only bind mount of the pinned checkout
-	Enabled bool   // --sandbox flag; requires docker daemon
+	Image        string        // pinned digest in production; tag for POC
+	RepoDir      string        // read-only bind mount of the pinned checkout
+	Enabled      bool          // --sandbox flag; requires docker daemon
+	ImageCache   string        // RO mount of pre-pulled images for KinD (never live-pull)
+	ReproTimeout time.Duration // cap for RunRepro; default 300s
 }
 
 type StageResult struct {

@@ -1,8 +1,11 @@
 package policy
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/repro"
 )
 
 func testCfg(t *testing.T) *Config {
@@ -613,5 +616,107 @@ func TestLabelRules(t *testing.T) {
 	d = e.Evaluate(Action{Type: "set_labels", Params: map[string]any{"add": []string{"area/engine", "bug"}}}, ctx)
 	if !d.Allowed {
 		t.Fatalf("area label should be allowed: %v", d.Rules)
+	}
+}
+
+func issueReproCtx() Context {
+	return Context{
+		Workflow:         "issue_repro",
+		Repo:             "amartyatatspandey/kyverno",
+		Issue:            &IssueFacts{Number: 42, State: "OPEN"},
+		ReproBundleValid: true,
+		Now:              time.Now(),
+	}
+}
+
+func TestRunReproGoldenCases(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	cases := []struct {
+		name    string
+		mutate  func(*Context)
+		allowed bool
+		rule    string
+	}{
+		{"happy_path", func(*Context) {}, true, ""},
+		{"kill_switch_denies", func(c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		{"sandbox_budget_exceeded", func(c *Context) { c.Counters.SandboxRunsToday = 20 }, false, "sandbox_budget"},
+		{"wrong_workflow_denied", func(c *Context) { c.Workflow = "issue_triage" }, false, "repro_workflow"},
+		{"missing_issue_denied", func(c *Context) { c.Issue = nil }, false, "issue_context_present"},
+		{"invalid_bundle_denied", func(c *Context) { c.ReproBundleValid = false }, false, "repro_bundle_valid"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := issueReproCtx()
+			tc.mutate(&ctx)
+			d := e.Evaluate(Action{Type: ActionRunRepro, Target: "issue/42"}, ctx)
+			if d.Allowed != tc.allowed {
+				t.Fatalf("allowed=%v want %v; trace=%v", d.Allowed, tc.allowed, d.Rules)
+			}
+			if !tc.allowed {
+				got := ""
+				for _, r := range d.Rules {
+					if !r.Pass {
+						got = r.Rule
+						break
+					}
+				}
+				if got != tc.rule {
+					t.Fatalf("failing rule=%q want %q; trace=%v", got, tc.rule, d.Rules)
+				}
+			}
+		})
+	}
+}
+
+func TestRunReproDeniesHostNetworkBundleEvenIfOtherFactsGreen(t *testing.T) {
+	// The YAML never enters Context. Runtime must set ReproBundleValid from
+	// ValidateReproBundle; this golden case pins that an invalid bundle is a
+	// hard DENY even when kill switch, budget, and workflow are otherwise green.
+	hostNet := &repro.ReproBundle{
+		PolicyYAML: `apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-app-label
+spec:
+  rules: []
+`,
+		ResourceYAML: `apiVersion: v1
+kind: Pod
+metadata:
+  name: demo
+spec:
+  hostNetwork: true
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.9
+`,
+		KyvernoVersion: "1.18.0",
+	}
+	ok, reason := repro.ValidateReproBundle(hostNet)
+	if ok {
+		t.Fatal("setup: hostNetwork bundle must fail ValidateReproBundle")
+	}
+	if !strings.Contains(reason, "hostNetwork") {
+		t.Fatalf("setup reason=%q", reason)
+	}
+
+	ctx := issueReproCtx()
+	ctx.ReproBundleValid = ok // false
+	ctx.KillSwitch = false
+	ctx.Counters.SandboxRunsToday = 0
+	d := NewEngine(testCfg(t)).Evaluate(Action{Type: ActionRunRepro, Target: "issue/42"}, ctx)
+	if d.Allowed {
+		t.Fatal("invalid bundle must DENY run_repro regardless of other green facts")
+	}
+	if !strings.Contains(d.DenyReason(), "repro_bundle_valid") {
+		t.Fatalf("want repro_bundle_valid denial, got %q", d.DenyReason())
+	}
+}
+
+func TestRunReproCannotMerge(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	d := e.Evaluate(Action{Type: "merge_pr", Target: "pr/1"}, issueReproCtx())
+	if d.Allowed {
+		t.Fatal("merge_pr must be unreachable from issue_repro")
 	}
 }

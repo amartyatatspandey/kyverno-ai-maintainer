@@ -17,6 +17,7 @@ import (
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/intel"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/llm"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/policy"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/repro"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
 )
 
@@ -32,13 +33,14 @@ type Options struct {
 }
 
 type Runner struct {
-	opts   Options
-	cfg    *policy.Config
-	engine *policy.Engine
-	gh     *ghx.Client
-	model  llm.Provider
-	tmap   *intel.TestMap
-	sbx    *sandbox.Runner
+	opts      Options
+	cfg       *policy.Config
+	engine    *policy.Engine
+	gh        *ghx.Client
+	model     llm.Provider
+	tmap      *intel.TestMap
+	sbx       *sandbox.Runner
+	reproExec func(*repro.ReproBundle) (*sandbox.ReproResult, error) // test hook; panics in injection tests
 }
 
 func New(o Options) (*Runner, error) {
@@ -57,7 +59,10 @@ func New(o Options) (*Runner, error) {
 		opts: o, cfg: cfg, engine: policy.NewEngine(cfg),
 		gh:    &ghx.Client{Repo: o.Repo, DryRun: o.DryRun, Dir: o.RepoDir},
 		model: llm.FromEnv(), tmap: tmap,
-		sbx: &sandbox.Runner{Image: "golang:1.25", RepoDir: o.RepoDir, Enabled: o.UseSandbox},
+		sbx: &sandbox.Runner{
+			Image: "golang:1.25", RepoDir: o.RepoDir, Enabled: o.UseSandbox,
+			ImageCache: cfg.Repro.ImageCache, ReproTimeout: reproTimeout(cfg),
+		},
 	}, nil
 }
 
@@ -787,6 +792,129 @@ func (r *Runner) classifyIssue(st *runState, iss *ghx.IssueView) classification 
 	return c
 }
 
+// RunIssueRepro is W5: extract untrusted issue YAML, validate on a strict
+// allowlist, and only then run a scripted KinD/CLI observation.
+func (r *Runner) RunIssueRepro(ctx context.Context, number int) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	runID := audit.NewRunID(fmt.Sprintf("issue%d", number))
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "issue_repro", "entity": fmt.Sprintf("issue/%d", number),
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{"tool": "github.get_issue", "args": number, "read_only": true})
+	iss, err := r.gh.GetIssue(number)
+	if err != nil {
+		return err
+	}
+	facts := &policy.IssueFacts{Number: iss.Number, State: iss.State}
+	for _, l := range iss.Labels {
+		facts.Labels = append(facts.Labels, l.Name)
+	}
+
+	bundle, extractErr := repro.ExtractReproArtifacts(iss.Body)
+	valid := false
+	rejectReason := ""
+	if extractErr != nil {
+		rejectReason = extractErr.Error()
+	} else {
+		valid, rejectReason = repro.ValidateReproBundleWith(bundle, reproLimits(r.cfg))
+	}
+	log.Emit("repro_validation", map[string]any{"valid": valid, "reason": rejectReason})
+
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "issue_repro", Repo: r.opts.Repo, Issue: facts,
+		ReproBundleValid: valid, RunID: runID, Counters: st.counters,
+		KillSwitch: kill, Now: time.Now(),
+	}
+
+	if !valid {
+		r.commentIssueRepro(st, pctx, number, runID, renderReproRejected(runID, rejectReason))
+		return nil
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionRunRepro, Target: fmt.Sprintf("issue/%d", number)}, pctx)
+	r.logDecision(st, policy.ActionRunRepro, d)
+	if !d.Allowed {
+		r.commentIssueRepro(st, pctx, number, runID, renderReproRejected(runID, d.DenyReason()))
+		return nil
+	}
+
+	if !r.opts.UseSandbox {
+		log.Emit("action_skipped", map[string]any{
+			"action": policy.ActionRunRepro,
+			"reason": "sandbox disabled (pass --sandbox)",
+		})
+		r.commentIssueRepro(st, pctx, number, runID, renderReproRejected(runID, "sandbox disabled (pass --sandbox)"))
+		return nil
+	}
+
+	result, gateReason, err := r.reproIfAllowed(bundle)
+	if gateReason != "" {
+		// Defense in depth: validation is checked twice. Never run, never echo YAML.
+		r.commentIssueRepro(st, pctx, number, runID, renderReproRejected(runID, gateReason))
+		return nil
+	}
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "sandbox.run_repro", "error": err.Error()})
+		if result == nil {
+			result = &sandbox.ReproResult{ActualBehavior: "error", Success: false, Logs: err.Error()}
+		}
+	}
+	if result == nil {
+		result = &sandbox.ReproResult{ActualBehavior: "error", Success: false, Logs: "empty repro result"}
+	}
+	log.Emit("repro_result", map[string]any{
+		"actual": result.ActualBehavior, "success": result.Success,
+	})
+
+	expected := ""
+	if bundle != nil {
+		expected = bundle.ExpectedBehavior
+	}
+	version := ""
+	if bundle != nil {
+		version = bundle.KyvernoVersion
+	}
+	r.commentIssueRepro(st, pctx, number, runID, renderReproResult(runID, version, expected, result))
+
+	add, remove := []string{"repro-confirmed"}, []string{"repro-failed"}
+	if !result.Success {
+		add, remove = []string{"repro-failed"}, []string{"repro-confirmed"}
+	}
+	ld := r.engine.Evaluate(policy.Action{Type: "set_labels", Target: fmt.Sprintf("issue/%d", number),
+		Params: map[string]any{"add": add, "remove": remove}}, pctx)
+	r.logDecision(st, "set_labels", ld)
+	if ld.Allowed {
+		res, err := r.gh.SetLabels(&ld, number, add, remove)
+		r.logAction(st, "set_labels", res, err)
+	}
+	return nil
+}
+
+func (r *Runner) commentIssueRepro(st *runState, pctx policy.Context, number int, runID, body string) {
+	cd := r.engine.Evaluate(policy.Action{Type: "comment", Target: fmt.Sprintf("issue/%d", number)}, pctx)
+	r.logDecision(st, "comment", cd)
+	if cd.Allowed {
+		res, err := r.gh.UpsertComment(&cd, "issue", number, "issue-repro", body)
+		r.logAction(st, "comment", res, err)
+	}
+}
+
 // ---- helpers ----
 
 func (r *Runner) logDecision(st *runState, action string, d policy.Decision) {
@@ -807,6 +935,42 @@ func (r *Runner) logAction(st *runState, action string, result any, err error) {
 	}
 	st.actions++
 	st.log.Emit("action_executed", map[string]any{"action": action, "result": result})
+}
+
+func (r *Runner) execRepro(bundle *repro.ReproBundle) (*sandbox.ReproResult, error) {
+	if r.reproExec != nil {
+		return r.reproExec(bundle)
+	}
+	return r.sbx.RunRepro(bundle)
+}
+
+// reproIfAllowed is the fail-safe: ValidateReproBundle must pass before
+// sandbox.RunRepro is invoked. Injection tests install a panicking hook.
+func (r *Runner) reproIfAllowed(bundle *repro.ReproBundle) (*sandbox.ReproResult, string, error) {
+	ok, reason := repro.ValidateReproBundleWith(bundle, reproLimits(r.cfg))
+	if !ok {
+		return nil, reason, nil
+	}
+	res, err := r.execRepro(bundle)
+	return res, "", err
+}
+
+func reproLimits(cfg *policy.Config) repro.Limits {
+	l := repro.DefaultLimits()
+	if cfg != nil && cfg.Repro.MaxYAMLBytes > 0 {
+		l.MaxYAMLBytes = cfg.Repro.MaxYAMLBytes
+	}
+	if cfg != nil && len(cfg.Repro.AllowedVersions) > 0 {
+		l.AllowedVersions = cfg.Repro.AllowedVersions
+	}
+	return l
+}
+
+func reproTimeout(cfg *policy.Config) time.Duration {
+	if cfg != nil && cfg.Repro.TimeoutSeconds > 0 {
+		return time.Duration(cfg.Repro.TimeoutSeconds) * time.Second
+	}
+	return 300 * time.Second
 }
 
 func summarizeResults(rs []sandbox.StageResult) []map[string]any {
