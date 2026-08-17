@@ -219,6 +219,39 @@ func renderDocsGap(runID string, pr *policy.PRFacts, reason string) string {
 	return b.String()
 }
 
+func renderDiscussionAnswer(runID, answer string, snips []intel.DocSnippet) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — discussion answer")
+	w("")
+	w("%s", escapeParam(answer, 4000))
+	w("")
+	var files []string
+	for _, s := range snips {
+		files = append(files, "`"+escapeParam(s.Path, 120)+"`")
+	}
+	if len(files) == 0 {
+		w("_grounded in: _none_ (no local doc snippets)._")
+	} else {
+		w("_grounded in: %s._", strings.Join(files, ", "))
+	}
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
+func renderDiscussionEscalation(runID string) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — discussion escalation")
+	w("")
+	w("I don't have a confident answer — flagging for a maintainer.")
+	w("The assistant only answers from local documentation (keyword overlap + a grounded draft); it will not guess.")
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
 func renderFlakyReport(runID string, cands []intel.FlakyCandidate) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }

@@ -92,6 +92,10 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		if !evaluateDocsGapDetection(ctx, add) || !e.commentBudget(add, ctx) {
 			return d
 		}
+	case ActionAnswerDiscussion:
+		if !evaluateDiscussionQA(ctx, add, e.cfg) || !e.commentBudget(add, ctx) {
+			return d
+		}
 	case ActionRunPolicyLint:
 		if !evaluateRunPolicyLint(ctx, add) {
 			return d
@@ -119,7 +123,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 
 func githubOp(actionType string) string {
 	switch actionType {
-	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport, ActionCommentDocsGap:
+	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport, ActionCommentDocsGap, ActionAnswerDiscussion:
 		return "comment"
 	default:
 		return actionType
@@ -174,6 +178,31 @@ func evaluateDocsGapDetection(ctx Context, add func(string, bool, string) bool) 
 	// prose cannot affect this rule (see TestDocsGapIgnoresPoisonedPRBody).
 	return add("user_facing_changed_files", touchesDocsSurface(ctx.PR.ChangedFiles),
 		"changed files touch labels.yml area/cli, area/api, or area/engine")
+}
+
+func evaluateDiscussionQA(ctx Context, add func(string, bool, string) bool, cfg *Config) bool {
+	if !add("discussion_qa_workflow", ctx.Workflow == "discussion_qa", "answer_discussion requires workflow discussion_qa") {
+		return false
+	}
+	if !add("discussion_present", ctx.Discussion != nil, "discussion Q&A requires discussion facts") {
+		return false
+	}
+	minConf := cfg.DiscussionQA.MinConfidence
+	if minConf <= 0 {
+		minConf = 0.7
+	}
+	minRet := cfg.DiscussionQA.MinRetrievalScore
+	if minRet <= 0 {
+		minRet = 0.2
+	}
+	d := ctx.Discussion
+	if !add("llm_confidence", d.LLMConfidence >= minConf,
+		fmt.Sprintf("llm confidence %.2f ≥ %.2f", d.LLMConfidence, minConf)) {
+		return false
+	}
+	// Retrieval score is computed from the local docs index, not the model.
+	return add("retrieval_score", d.BestRetrievalScore >= minRet,
+		fmt.Sprintf("best snippet score %.3f ≥ %.2f", d.BestRetrievalScore, minRet))
 }
 
 // docsGapGlobs matches intel.docsGapGlobs / labels.yml area/cli, area/api, area/engine.

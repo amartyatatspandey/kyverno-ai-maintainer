@@ -6,6 +6,7 @@
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
 //	assistant run --pr N --workflow policy_lint --sandbox  # kyverno apply/test on policy-library YAML
 //	assistant run --pr N --workflow docs_gap_detection  # flag missing website-repo docs pointer
+//	assistant run --discussion N  # docs-grounded Q&A (escalates when not confident)
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
 //	assistant flaky-report      # comment flaky suite candidates (never auto-quarantines)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
@@ -55,6 +56,7 @@ func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	pr := fs.Int("pr", 0, "pull request number")
 	issue := fs.Int("issue", 0, "issue number (triage flow)")
+	discussion := fs.Int("discussion", 0, "discussion number (docs-grounded Q&A)")
 	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot, reviewer_suggest, policy_lint, docs_gap_detection")
 	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
 	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
@@ -74,6 +76,8 @@ func cmdRun(args []string) {
 	}
 	ctx := context.Background()
 	switch {
+	case *discussion > 0:
+		err = r.RunDiscussionQA(ctx, *discussion)
 	case *issue > 0:
 		err = r.RunIssueTriage(ctx, *issue)
 	case *pr > 0:
@@ -94,7 +98,7 @@ func cmdRun(args []string) {
 			fatal(fmt.Errorf("unknown --workflow %q for --pr (want dependency_prs, dco_check, welcome_bot, reviewer_suggest, policy_lint, or docs_gap_detection)", *workflow))
 		}
 	default:
-		fatal(fmt.Errorf("need --pr N or --issue N"))
+		fatal(fmt.Errorf("need --pr N, --issue N, or --discussion N"))
 	}
 	if err != nil {
 		fatal(err)
@@ -250,6 +254,7 @@ func usage() {
 
   assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest|policy_lint|docs_gap_detection] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
+  assistant run --discussion N [--repo-dir path] [--dry-run=false]  # docs-grounded Q&A
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
   assistant flaky-report [--repo owner/name] [--dry-run=false]  # flag flaky suites; never auto-quarantines
   assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]

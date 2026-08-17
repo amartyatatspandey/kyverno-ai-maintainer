@@ -85,3 +85,8 @@ flaky:
   failure_rate_threshold: 0.15
   lookback_days: 14
   workflow: "Conformance tests"
+
+# Discussion Q&A: both gates required. LLM confidence is not trusted alone.
+discussion_qa:
+  min_confidence: 0.7
+  min_retrieval_score: 0.2

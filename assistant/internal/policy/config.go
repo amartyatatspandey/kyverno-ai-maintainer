@@ -56,6 +56,10 @@ type Config struct {
 		LookbackDays         int     `yaml:"lookback_days"`
 		Workflow             string  `yaml:"workflow"`
 	} `yaml:"flaky"`
+	DiscussionQA struct {
+		MinConfidence     float64 `yaml:"min_confidence"`
+		MinRetrievalScore float64 `yaml:"min_retrieval_score"`
+	} `yaml:"discussion_qa"`
 }
 
 // LoadConfig parses and validates. Any error must halt the assistant

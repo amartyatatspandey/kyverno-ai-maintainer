@@ -60,11 +60,14 @@ type CommitFacts struct {
 	SignedOff []bool
 }
 
-// DiscussionFacts for the W6 Q&A workflow.
+// DiscussionFacts for the W6 Q&A workflow. Scores are assembled by the
+// caller (retrieval + LLM); the discussion body never appears here.
 type DiscussionFacts struct {
-	Number          int
-	Category        string
-	AnsweredByHuman bool
+	Number             int
+	Category           string
+	AnsweredByHuman    bool
+	LLMConfidence      float64 // model-reported; not trusted alone
+	BestRetrievalScore float64 // deterministic keyword-overlap; policy checks this
 }
 
 // Counters holds today's action counts (persisted by the store).

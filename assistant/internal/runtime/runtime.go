@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -633,6 +634,100 @@ func (r *Runner) RunFlakyDetection() error {
 	}
 	res, err := r.gh.UpsertComment(&d, "issue", issueNum, "flaky-report", renderFlakyReport(runID, cands))
 	r.logAction(st, policy.ActionCommentFlakyReport, res, err)
+	return nil
+}
+
+// RunDiscussionQA answers a GitHub Discussion from local docs, or escalates.
+// The discussion body is UNTRUSTED: retrieval uses it only as a keyword query;
+// the LLM sees it only inside <untrusted_question> plus retrieved snippets.
+func (r *Runner) RunDiscussionQA(ctx context.Context, number int) error {
+	runID := audit.NewRunID(fmt.Sprintf("disc%d", number))
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "discussion_qa", "entity": fmt.Sprintf("discussion/%d", number),
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{"tool": "github.get_discussion", "args": number, "read_only": true})
+	facts, body, err := r.gh.GetDiscussion(number)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"error": err.Error()})
+		return err
+	}
+	if facts.AnsweredByHuman {
+		log.Emit("action_skipped", map[string]any{
+			"action": policy.ActionAnswerDiscussion,
+			"reason": "a human already replied; not piling on",
+		})
+		return nil
+	}
+
+	docsDir := filepath.Join(r.opts.RepoDir, "docs/dev")
+	if r.opts.RepoDir == "" {
+		docsDir = "docs/dev"
+	}
+	idx, err := intel.BuildDocsIndex(docsDir)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "intel.build_docs_index", "error": err.Error()})
+		return err
+	}
+	snips, err := idx.TopMatches(body, 3)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "intel.docs_top_matches", "error": err.Error()})
+		return err
+	}
+	best := 0.0
+	for _, s := range snips {
+		if s.Score > best {
+			best = s.Score
+		}
+	}
+	log.Emit("docs_retrieval", map[string]any{"n": len(snips), "best_score": best})
+
+	answer, conf := "", 0.0
+	if st.llmCalls < r.opts.MaxLLMCall {
+		answer, conf, err = r.model.AnswerWithGrounding(body, snips)
+		st.llmCalls++
+		if err != nil {
+			log.Emit("llm_call", map[string]any{"insertion_point": "discussion_qa", "error": err.Error()})
+			answer, conf = "", 0
+		} else {
+			log.Emit("llm_call", map[string]any{"insertion_point": "discussion_qa", "confidence": conf, "advisory": true})
+		}
+	}
+
+	facts.LLMConfidence = conf
+	facts.BestRetrievalScore = best
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "discussion_qa", Repo: r.opts.Repo, Discussion: facts,
+		RunID: runID, Counters: st.counters, KillSwitch: kill, Now: time.Now(),
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionAnswerDiscussion, Target: fmt.Sprintf("discussion/%d", number)}, pctx)
+	r.logDecision(st, policy.ActionAnswerDiscussion, d)
+	if d.Allowed {
+		res, err := r.gh.PostDiscussionComment(&d, number, renderDiscussionAnswer(runID, answer, snips))
+		r.logAction(st, policy.ActionAnswerDiscussion, res, err)
+		return nil
+	}
+	log.Emit("action_skipped", map[string]any{"action": policy.ActionAnswerDiscussion, "reason": d.DenyReason()})
+	cd := r.engine.Evaluate(policy.Action{Type: "comment", Target: fmt.Sprintf("discussion/%d", number)}, pctx)
+	r.logDecision(st, "comment", cd)
+	if !cd.Allowed {
+		log.Emit("action_skipped", map[string]any{"action": "comment", "reason": cd.DenyReason()})
+		return nil
+	}
+	res, err := r.gh.PostDiscussionComment(&cd, number, renderDiscussionEscalation(runID))
+	r.logAction(st, "comment", res, err)
 	return nil
 }
 

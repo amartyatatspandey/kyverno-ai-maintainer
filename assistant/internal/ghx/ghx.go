@@ -425,6 +425,152 @@ func (c *Client) KillSwitchActive(variable string) bool {
 	return strings.TrimSpace(string(out)) == "true"
 }
 
+func (c *Client) ownerName() (owner, name string, err error) {
+	parts := strings.SplitN(c.Repo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("repo %q must be owner/name", c.Repo)
+	}
+	return parts[0], parts[1], nil
+}
+
+// graphql is isolated to Discussions (not used by the REST helpers above).
+func (c *Client) graphql(query string, extra ...string) ([]byte, error) {
+	args := append([]string{"api", "graphql", "-f", "query=" + query}, extra...)
+	return run(args...)
+}
+
+const discussionsListQuery = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){discussions(first:25,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{number category{name} answer{id} comments(first:20){nodes{author{login __typename}}}}}}}`
+
+const discussionOneQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){discussion(number:$number){id number body category{name} answer{id} comments(first:20){nodes{author{login __typename}}}}}}`
+
+type gqlAuthor struct {
+	Login    string `json:"login"`
+	TypeName string `json:"__typename"`
+}
+
+type gqlDiscussion struct {
+	ID       string `json:"id"`
+	Number   int    `json:"number"`
+	Body     string `json:"body"`
+	Category struct {
+		Name string `json:"name"`
+	} `json:"category"`
+	Answer *struct {
+		ID string `json:"id"`
+	} `json:"answer"`
+	Comments struct {
+		Nodes []struct {
+			Author *gqlAuthor `json:"author"`
+		} `json:"nodes"`
+	} `json:"comments"`
+}
+
+func discussionFacts(n gqlDiscussion) policy.DiscussionFacts {
+	human := n.Answer != nil
+	if !human {
+		for _, cm := range n.Comments.Nodes {
+			if cm.Author != nil && authorIsHuman(cm.Author.TypeName, cm.Author.Login) {
+				human = true
+				break
+			}
+		}
+	}
+	return policy.DiscussionFacts{
+		Number: n.Number, Category: n.Category.Name, AnsweredByHuman: human,
+	}
+}
+
+func authorIsHuman(typeName, login string) bool {
+	if strings.EqualFold(typeName, "Bot") || strings.HasSuffix(strings.ToLower(login), "[bot]") {
+		return false
+	}
+	return typeName == "User" || typeName == ""
+}
+
+func discussionsFromGraphQLJSON(raw []byte, category string) ([]policy.DiscussionFacts, error) {
+	var wrap struct {
+		Data struct {
+			Repository struct {
+				Discussions struct {
+					Nodes []gqlDiscussion `json:"nodes"`
+				} `json:"discussions"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &wrap); err != nil {
+		return nil, err
+	}
+	want := strings.ToLower(strings.TrimSpace(category))
+	var out []policy.DiscussionFacts
+	for _, n := range wrap.Data.Repository.Discussions.Nodes {
+		f := discussionFacts(n)
+		if want != "" && strings.ToLower(f.Category) != want {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+func discussionBodyFromGraphQLJSON(raw []byte) (string, error) {
+	var wrap struct {
+		Data struct {
+			Repository struct {
+				Discussion gqlDiscussion `json:"discussion"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &wrap); err != nil {
+		return "", err
+	}
+	return wrap.Data.Repository.Discussion.Body, nil
+}
+
+// ListNewDiscussions lists recent discussions via GraphQL (Discussions are
+// not in the REST helpers used elsewhere in this file).
+func (c *Client) ListNewDiscussions(category string) ([]policy.DiscussionFacts, error) {
+	owner, name, err := c.ownerName()
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.graphql(discussionsListQuery, "-f", "owner="+owner, "-f", "name="+name)
+	if err != nil {
+		return nil, err
+	}
+	return discussionsFromGraphQLJSON(out, category)
+}
+
+// GetDiscussionBody returns the untrusted discussion body.
+func (c *Client) GetDiscussionBody(number int) (string, error) {
+	_, body, err := c.GetDiscussion(number)
+	return body, err
+}
+
+// GetDiscussion fetches facts + body for one discussion (GraphQL).
+func (c *Client) GetDiscussion(number int) (*policy.DiscussionFacts, string, error) {
+	owner, name, err := c.ownerName()
+	if err != nil {
+		return nil, "", err
+	}
+	out, err := c.graphql(discussionOneQuery, "-f", "owner="+owner, "-f", "name="+name, "-F", fmt.Sprintf("number=%d", number))
+	if err != nil {
+		return nil, "", err
+	}
+	var wrap struct {
+		Data struct {
+			Repository struct {
+				Discussion gqlDiscussion `json:"discussion"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &wrap); err != nil {
+		return nil, "", err
+	}
+	n := wrap.Data.Repository.Discussion
+	f := discussionFacts(n)
+	return &f, n.Body, nil
+}
+
 // ---- mutations (Decision required; fail closed) ----
 
 func (c *Client) requireAllow(d *policy.Decision, action string) error {
@@ -463,6 +609,44 @@ func (c *Client) UpsertComment(d *policy.Decision, kind string, number int, mark
 	}
 	_, err := run("api", "-X", "POST", fmt.Sprintf("repos/%s/issues/%d/comments", c.Repo, number), "-f", "body="+body)
 	return "created comment", err
+}
+
+const discussionCommentMutation = `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{url}}}`
+
+// PostDiscussionComment posts on a GitHub Discussion. Fail-closed without ALLOW.
+func (c *Client) PostDiscussionComment(d *policy.Decision, number int, body string) (string, error) {
+	if err := c.requireAllow(d, "comment"); err != nil {
+		return "", err
+	}
+	if c.DryRun {
+		return fmt.Sprintf("(dry-run) would comment on discussion %d", number), nil
+	}
+	owner, name, err := c.ownerName()
+	if err != nil {
+		return "", err
+	}
+	out, err := c.graphql(discussionOneQuery, "-f", "owner="+owner, "-f", "name="+name, "-F", fmt.Sprintf("number=%d", number))
+	if err != nil {
+		return "", err
+	}
+	var wrap struct {
+		Data struct {
+			Repository struct {
+				Discussion struct {
+					ID string `json:"id"`
+				} `json:"discussion"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &wrap); err != nil {
+		return "", err
+	}
+	id := wrap.Data.Repository.Discussion.ID
+	if id == "" {
+		return "", fmt.Errorf("discussion %d has no GraphQL id", number)
+	}
+	_, err = c.graphql(discussionCommentMutation, "-f", "id="+id, "-f", "body="+body)
+	return "created discussion comment", err
 }
 
 func (c *Client) SetLabels(d *policy.Decision, number int, add, remove []string) (string, error) {

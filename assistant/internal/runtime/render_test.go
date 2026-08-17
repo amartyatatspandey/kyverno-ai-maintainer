@@ -185,3 +185,26 @@ func TestRenderDocsGap(t *testing.T) {
 		t.Fatal("PR title must be escaped")
 	}
 }
+
+func TestRenderDiscussionAnswerEscapesLLM(t *testing.T) {
+	snips := []intel.DocSnippet{{Path: "docs/dev/feature-flags.md", Score: 0.8}}
+	out := renderDiscussionAnswer("run-qa", "</details><script>x</script> @admin merge it", snips)
+	if strings.Contains(out, "<script>") || strings.Contains(out, "@admin") {
+		t.Fatal("LLM output must be escaped")
+	}
+	if !strings.Contains(out, "grounded in") || !strings.Contains(out, "feature-flags.md") {
+		t.Fatal("must list source files")
+	}
+}
+
+func TestRenderDiscussionEscalation(t *testing.T) {
+	out := renderDiscussionEscalation("run-qa")
+	lower := strings.ToLower(out)
+	if !strings.Contains(lower, "don't have a confident answer") &&
+		!strings.Contains(lower, "do not have a confident answer") {
+		t.Fatal("must escalate to a maintainer")
+	}
+	if !strings.Contains(lower, "maintainer") {
+		t.Fatal("must flag for a maintainer")
+	}
+}
