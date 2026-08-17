@@ -4,6 +4,7 @@
 //	assistant run --pr N --workflow dco_check    # DCO sign-off guidance
 //	assistant run --pr N --workflow welcome_bot  # first-time contributor welcome
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
+//	assistant run --pr N --workflow policy_lint --sandbox  # kyverno apply/test on policy-library YAML
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
 //	assistant audit show <id>   # human-readable decision trace
@@ -50,7 +51,7 @@ func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	pr := fs.Int("pr", 0, "pull request number")
 	issue := fs.Int("issue", 0, "issue number (triage flow)")
-	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot, reviewer_suggest")
+	workflow := fs.String("workflow", "", "workflow: dependency_prs (default with --pr), dco_check, welcome_bot, reviewer_suggest, policy_lint")
 	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
 	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
 	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
@@ -81,8 +82,10 @@ func cmdRun(args []string) {
 			err = r.RunWelcomeBot(ctx, *pr)
 		case "reviewer_suggest":
 			err = r.RunReviewerSuggest(ctx, *pr)
+		case "policy_lint":
+			err = r.RunPolicyLint(ctx, *pr)
 		default:
-			fatal(fmt.Errorf("unknown --workflow %q for --pr (want dependency_prs, dco_check, welcome_bot, or reviewer_suggest)", *workflow))
+			fatal(fmt.Errorf("unknown --workflow %q for --pr (want dependency_prs, dco_check, welcome_bot, reviewer_suggest, or policy_lint)", *workflow))
 		}
 	default:
 		fatal(fmt.Errorf("need --pr N or --issue N"))
@@ -212,7 +215,7 @@ func cmdAudit(args []string) {
 func usage() {
 	fmt.Fprint(os.Stderr, `Kyverno AI Maintainer Assistant (POC)
 
-  assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
+  assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest|policy_lint] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
   assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]

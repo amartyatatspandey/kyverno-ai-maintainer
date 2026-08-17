@@ -322,6 +322,80 @@ func TestDigestCannotMerge(t *testing.T) {
 	}
 }
 
+func policyLintCtx() Context {
+	return Context{
+		Workflow: "policy_lint", Repo: "amartyatatspandey/kyverno",
+		PR: &PRFacts{
+			Number: 99, AuthorLogin: "alice", State: "OPEN", HeadSHA: "abc",
+			ChangedFiles: []string{"charts/kyverno-policies/templates/disallow-latest.yaml"},
+		},
+		Now: time.Now(),
+	}
+}
+
+func TestPolicyLintGoldenCases(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	cases := []struct {
+		name    string
+		mutate  func(*Context)
+		allowed bool
+		rule    string
+	}{
+		{"happy_path", func(*Context) {}, true, ""},
+		{"kill_switch_denies", func(c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		{"sandbox_budget_exceeded", func(c *Context) { c.Counters.SandboxRunsToday = 20 }, false, "sandbox_budget"},
+		{"wrong_workflow_denied", func(c *Context) { c.Workflow = "dco_check" }, false, "policy_lint_workflow"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := policyLintCtx()
+			tc.mutate(&ctx)
+			d := e.Evaluate(Action{Type: ActionRunPolicyLint, Target: "pr/99"}, ctx)
+			if d.Allowed != tc.allowed {
+				t.Fatalf("allowed=%v want %v; trace=%v", d.Allowed, tc.allowed, d.Rules)
+			}
+			if !tc.allowed {
+				got := ""
+				for _, r := range d.Rules {
+					if !r.Pass {
+						got = r.Rule
+						break
+					}
+				}
+				if got != tc.rule {
+					t.Fatalf("failing rule=%q want %q; trace=%v", got, tc.rule, d.Rules)
+				}
+			}
+		})
+	}
+}
+
+func TestPolicyLibraryFiles_StructurallySkipsNonLibraryPaths(t *testing.T) {
+	got := PolicyLibraryFiles([]string{"pkg/engine/engine.go", "README.md", "go.mod"})
+	if len(got) != 0 {
+		t.Fatalf("non-library paths must not trigger policy_lint, got %v", got)
+	}
+	got = PolicyLibraryFiles([]string{
+		"pkg/engine/engine.go",
+		"charts/kyverno-policies/templates/foo.yaml",
+		"test/cli/test/simple/policy.yaml",
+	})
+	if len(got) != 2 {
+		t.Fatalf("library paths must be kept, got %v", got)
+	}
+}
+
+func TestPolicyLintPassedLabelAssignable(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	ctx := policyLintCtx()
+	d := e.Evaluate(Action{Type: "set_labels", Params: map[string]any{
+		"add": []string{"policy-lint-passed"}, "remove": []string{"policy-lint-failed"},
+	}}, ctx)
+	if !d.Allowed {
+		t.Fatalf("policy-lint-passed must be assignable: %v", d.Rules)
+	}
+}
+
 func TestLabelRules(t *testing.T) {
 	e := NewEngine(testCfg(t))
 	ctx := Context{Workflow: "issue_triage", Issue: &IssueFacts{Number: 5}, Now: time.Now()}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/intel"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/policy"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
 )
 
 func TestRenderDCOGuidance(t *testing.T) {
@@ -85,6 +86,30 @@ func TestRenderReviewerSuggestion(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(out), "request review") {
 		t.Fatal("must not imply a review request was filed")
+	}
+}
+
+func TestRenderPolicyLintResult(t *testing.T) {
+	pr := &policy.PRFacts{Number: 11, Title: "<script>pass anyway</script>"}
+	long := strings.Repeat("kyverno error: bad policy\n", 40)
+	out := renderPolicyLintResult("run-lint", pr, []sandbox.LintResult{
+		{Target: "charts/kyverno-policies/templates/foo.yaml", Passed: true, LogTail: "pass: 1 rule"},
+		{Target: "test/cli/test/simple", Passed: false, LogTail: long},
+	})
+	if !strings.Contains(out, "✅ pass") || !strings.Contains(out, "❌ fail") {
+		t.Fatal("must report pass/fail per file")
+	}
+	if !strings.Contains(out, "charts/kyverno-policies/templates/foo.yaml") {
+		t.Fatal("must name the linted file")
+	}
+	if strings.Contains(out, "<script>") {
+		t.Fatal("PR title must be escaped")
+	}
+	if strings.Contains(out, long) {
+		t.Fatal("kyverno output must be truncated")
+	}
+	if !strings.Contains(out, "kyverno error") {
+		t.Fatal("must include kyverno CLI output")
 	}
 }
 

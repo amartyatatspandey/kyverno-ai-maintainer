@@ -169,6 +169,38 @@ func renderReviewerSuggestion(runID string, pr *policy.PRFacts, reviewers []inte
 	return b.String()
 }
 
+func renderPolicyLintResult(runID string, pr *policy.PRFacts, results []sandbox.LintResult) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — policy lint")
+	w("")
+	w("Ran `kyverno apply` / `kyverno test` in the credential-free sandbox against policy-library YAML.")
+	if pr != nil && pr.Title != "" {
+		w("")
+		w("PR: #%d — %s", pr.Number, escapeParam(pr.Title, 200))
+	}
+	w("")
+	if len(results) == 0 {
+		w("_no policy files linted_")
+	} else {
+		for _, t := range results {
+			mark := "✅ pass"
+			if !t.Passed {
+				mark = "❌ fail"
+			}
+			out := strings.Join(strings.Fields(t.LogTail), " ")
+			if out == "" {
+				w("- %s `%s`", mark, escapeParam(t.Target, 120))
+				continue
+			}
+			w("- %s `%s` — %s", mark, escapeParam(t.Target, 120), escapeParam(out, 300))
+		}
+	}
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
 func renderDigest(runID string, snap digestSnapshot) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }

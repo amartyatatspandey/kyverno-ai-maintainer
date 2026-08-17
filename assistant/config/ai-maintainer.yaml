@@ -72,6 +72,7 @@ github_ops:
 
 labels:
   assignable_denylist: ["security", "good first issue", "cherry-pick-*", "milestone-*", "release-*"]
+  assignable: ["policy-lint-passed", "policy-lint-failed"]
   never_remove: ["hold", "ai-hold", "triage", "security"]
 
 # Pinned tracking issue the weekly digest upserts onto (one comment, edited in place).

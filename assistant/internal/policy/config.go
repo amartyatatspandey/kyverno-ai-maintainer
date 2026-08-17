@@ -42,7 +42,11 @@ type Config struct {
 	GitHubOps map[string][]string `yaml:"github_ops"`
 	Labels    struct {
 		AssignableDenylist []string `yaml:"assignable_denylist"`
-		NeverRemove        []string `yaml:"never_remove"`
+		// Assignable documents labels this assistant may apply (policy-lint-*).
+		// It is not an exclusive allowlist — anything outside AssignableDenylist
+		// remains assignable (area/*, bug, …).
+		Assignable  []string `yaml:"assignable"`
+		NeverRemove []string `yaml:"never_remove"`
 	} `yaml:"labels"`
 	MaintainerDigest struct {
 		DigestIssueNumber int `yaml:"digest_issue_number"`

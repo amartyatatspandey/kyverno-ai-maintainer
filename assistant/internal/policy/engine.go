@@ -49,7 +49,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 	// not every template id).
 	allowedOps := e.cfg.GitHubOps[ctx.Workflow]
 	op := githubOp(a.Type)
-	opAllowed := slices.Contains(allowedOps, op) || a.Type == "run_scoped_tests"
+	opAllowed := slices.Contains(allowedOps, op) || a.Type == "run_scoped_tests" || a.Type == ActionRunPolicyLint
 	if !add("action_allowed_for_workflow", opAllowed,
 		fmt.Sprintf("%s ∈ %v", a.Type, allowedOps)) {
 		return d
@@ -82,6 +82,14 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		}
 	case ActionCommentDigest:
 		if !evaluateMaintainerDigest(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
+	case ActionRunPolicyLint:
+		if !evaluateRunPolicyLint(ctx, add) {
+			return d
+		}
+		if !add("sandbox_budget", ctx.Counters.SandboxRunsToday < e.cfg.RateLimits.SandboxRunsPerDay,
+			fmt.Sprintf("%d/%d today", ctx.Counters.SandboxRunsToday, e.cfg.RateLimits.SandboxRunsPerDay)) {
 			return d
 		}
 	case "run_scoped_tests":
@@ -141,6 +149,48 @@ func evaluateReviewerSuggest(ctx Context, add func(string, bool, string) bool) b
 // new counter type. Content of the digest is a runtime decision.
 func evaluateMaintainerDigest(ctx Context, add func(string, bool, string) bool) bool {
 	return add("digest_workflow", ctx.Workflow == "maintainer_digest", "comment_digest requires workflow maintainer_digest")
+}
+
+// evaluateRunPolicyLint authorizes sandbox execution of kyverno apply/test.
+// Whether the PR actually touches the policy library is a runtime filter
+// (PolicyLibraryFiles): empty => the workflow is not invoked at all.
+func evaluateRunPolicyLint(ctx Context, add func(string, bool, string) bool) bool {
+	if !add("policy_lint_workflow", ctx.Workflow == "policy_lint", "run_policy_lint requires workflow policy_lint") {
+		return false
+	}
+	return add("pr_context_present", ctx.PR != nil, "policy lint requires PR facts")
+}
+
+// PolicyLibraryPrefixes are in-repo paths that carry community/sample policies.
+// charts/kyverno-policies is the Helm policy chart; test/cli/test and test/policy
+// are the CLI kyverno-test fixtures (NOTES.md §4). The website policy library
+// lives in a separate repo and is not present in this checkout.
+var PolicyLibraryPrefixes = []string{
+	"charts/kyverno-policies/",
+	"test/cli/test/",
+	"test/policy/",
+}
+
+// PolicyLibraryFiles returns the subset of changed files under the policy
+// library prefixes. Empty means policy_lint structurally does not apply.
+func PolicyLibraryFiles(changed []string) []string {
+	var out []string
+	for _, f := range changed {
+		if !isYAML(f) {
+			continue
+		}
+		for _, p := range PolicyLibraryPrefixes {
+			if strings.HasPrefix(f, p) || f == strings.TrimSuffix(p, "/") {
+				out = append(out, f)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func isYAML(f string) bool {
+	return strings.HasSuffix(strings.ToLower(f), ".yaml") || strings.HasSuffix(strings.ToLower(f), ".yml")
 }
 
 func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ctx Context) bool {

@@ -423,6 +423,97 @@ func (r *Runner) RunReviewerSuggest(ctx context.Context, number int) error {
 	return nil
 }
 
+// RunPolicyLint lints changed policy-library YAML via the existing sandbox
+// (kyverno apply / kyverno test). PRs that do not touch the library are a
+// structural no-op — this rule never evaluates on those paths.
+func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
+	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "policy_lint", "entity": fmt.Sprintf("pr/%d", number),
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{"tool": "github.get_pull_request", "args": number, "read_only": true})
+	pr, _, err := r.gh.GetPRFacts(number)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	library := policy.PolicyLibraryFiles(pr.ChangedFiles)
+	if len(library) == 0 {
+		log.Emit("action_skipped", map[string]any{
+			"action": policy.ActionRunPolicyLint,
+			"reason": "changed files do not touch the policy library; workflow does not apply",
+		})
+		return nil
+	}
+
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "policy_lint", Repo: r.opts.Repo, PR: pr,
+		RunID: runID, Counters: st.counters, KillSwitch: kill, Now: time.Now(),
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionRunPolicyLint, Target: fmt.Sprintf("pr/%d", number)}, pctx)
+	r.logDecision(st, policy.ActionRunPolicyLint, d)
+	if !d.Allowed {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionRunPolicyLint, "reason": d.DenyReason()})
+		return nil
+	}
+
+	if !r.opts.UseSandbox {
+		log.Emit("action_skipped", map[string]any{
+			"action": policy.ActionRunPolicyLint,
+			"reason": "sandbox disabled (pass --sandbox)",
+		})
+		return nil
+	}
+
+	results, err := r.sbx.RunPolicyLint(ctx, library, 2*time.Minute)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "sandbox.run_policy_lint", "error": err.Error()})
+		return err
+	}
+	log.Emit("lint_results", map[string]any{"results": summarizeResults(results)})
+
+	cd := r.engine.Evaluate(policy.Action{Type: "comment", Target: fmt.Sprintf("pr/%d", number)}, pctx)
+	r.logDecision(st, "comment", cd)
+	if cd.Allowed {
+		res, err := r.gh.UpsertComment(&cd, "pr", number, "policy-lint", renderPolicyLintResult(runID, pr, results))
+		r.logAction(st, "comment", res, err)
+	}
+
+	passed := true
+	for _, res := range results {
+		if !res.Passed {
+			passed = false
+			break
+		}
+	}
+	add, remove := []string{"policy-lint-passed"}, []string{"policy-lint-failed"}
+	if !passed {
+		add, remove = []string{"policy-lint-failed"}, []string{"policy-lint-passed"}
+	}
+	ld := r.engine.Evaluate(policy.Action{Type: "set_labels", Target: fmt.Sprintf("pr/%d", number),
+		Params: map[string]any{"add": add, "remove": remove}}, pctx)
+	r.logDecision(st, "set_labels", ld)
+	if ld.Allowed {
+		res, err := r.gh.SetLabels(&ld, number, add, remove)
+		r.logAction(st, "set_labels", res, err)
+	}
+	return nil
+}
+
 // ---- LLM insertion points (advisory only) ----
 
 func (r *Runner) advisorySummary(st *runState, pr *policy.PRFacts, body string) string {
