@@ -82,7 +82,7 @@ Full detail — including a metric I had to correct and one genuine miss — in 
 | [INJECTION_TESTS.md](INJECTION_TESTS.md) / [INJECTION_RESULTS.md](INJECTION_RESULTS.md) | Prompt-injection plan and results |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Component/flow/sequence diagrams, permission model, self-critique |
 | [ASSUMPTIONS.md](ASSUMPTIONS.md) / [QUESTIONS.md](QUESTIONS.md) | What's unverified; what needs a maintainer's answer |
-| [DEMO_SCRIPT.md](DEMO_SCRIPT.md) / [VIDEO_CHECKLIST.md](VIDEO_CHECKLIST.md) | Demo narrative and submission checklist |
+| [DEMO_SCRIPT.md](DEMO_SCRIPT.md) | Demo narrative |
 | [SECURITY_ADVISORY_TRIAGE.md](SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](AUTO_BACKPORT.md) | Design-only specs — why these two stay unbuilt this pass |
 
 ## Code
