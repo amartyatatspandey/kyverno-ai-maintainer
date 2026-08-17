@@ -5,6 +5,7 @@
 //	assistant run --pr N --workflow welcome_bot  # first-time contributor welcome
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
+//	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
 //	assistant stop              # kill running sandboxes
@@ -31,6 +32,8 @@ func main() {
 		cmdRun(os.Args[2:])
 	case "digest":
 		cmdDigest(os.Args[2:])
+	case "draft-release-notes":
+		cmdDraftReleaseNotes(os.Args[2:])
 	case "audit":
 		cmdAudit(os.Args[2:])
 	case "stop":
@@ -123,6 +126,40 @@ func cmdDigest(args []string) {
 	}
 }
 
+// cmdDraftReleaseNotes writes a local changelog draft. It never mutates GitHub.
+func cmdDraftReleaseNotes(args []string) {
+	fs := flag.NewFlagSet("draft-release-notes", flag.ExitOnError)
+	since := fs.String("since", "", "git tag or YYYY-MM-DD (required)")
+	outPath := fs.String("out", "", "write markdown to this local file (default: stdout)")
+	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
+	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
+	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
+	repoDir := fs.String("repo-dir", "", "local checkout (needed to resolve git tags)")
+	fs.Parse(args)
+	if *since == "" {
+		fatal(fmt.Errorf("need --since <tag-or-YYYY-MM-DD>"))
+	}
+
+	r, err := runtime.New(runtime.Options{
+		Repo: *repo, ConfigPath: *cfg, MapPath: *tmap, RepoDir: *repoDir,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	md, err := r.DraftReleaseNotes(*since)
+	if err != nil {
+		fatal(err)
+	}
+	if *outPath == "" {
+		fmt.Print(md)
+		return
+	}
+	if err := os.WriteFile(*outPath, []byte(md), 0o644); err != nil {
+		fatal(err)
+	}
+	fmt.Fprintf(os.Stderr, "wrote %s\n", *outPath)
+}
+
 func cmdAudit(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -178,6 +215,7 @@ func usage() {
   assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
+  assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop
 

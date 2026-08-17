@@ -54,7 +54,7 @@ func New(o Options) (*Runner, error) {
 	}
 	return &Runner{
 		opts: o, cfg: cfg, engine: policy.NewEngine(cfg),
-		gh:    &ghx.Client{Repo: o.Repo, DryRun: o.DryRun},
+		gh:    &ghx.Client{Repo: o.Repo, DryRun: o.DryRun, Dir: o.RepoDir},
 		model: llm.FromEnv(), tmap: tmap,
 		sbx: &sandbox.Runner{Image: "golang:1.25", RepoDir: o.RepoDir, Enabled: o.UseSandbox},
 	}, nil

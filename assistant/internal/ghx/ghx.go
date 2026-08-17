@@ -16,6 +16,7 @@ import (
 type Client struct {
 	Repo   string // "owner/name"
 	DryRun bool
+	Dir    string // optional local checkout (git tag → date for changelogs)
 }
 
 func run(args ...string) ([]byte, error) {
@@ -106,6 +107,49 @@ func prFactsFromListJSON(raw []byte) ([]policy.PRFacts, error) {
 // ListOpenPRs lists open PRs using the same JSON field set as GetPRFacts.
 func (c *Client) ListOpenPRs() ([]policy.PRFacts, error) {
 	out, err := run("pr", "list", "-R", c.Repo, "--state", "open", "--limit", "100", "--json", prJSONFields)
+	if err != nil {
+		return nil, err
+	}
+	return prFactsFromListJSON(out)
+}
+
+func resolveSinceDate(ref, dir string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", fmt.Errorf("since ref is empty")
+	}
+	if t, err := time.Parse("2006-01-02", ref); err == nil {
+		return t.Format("2006-01-02"), nil
+	}
+	cmd := exec.Command("git", "log", "-1", "--format=%aI", ref)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve %q as git ref: %w", ref, err)
+	}
+	raw := strings.TrimSpace(string(out))
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return "", fmt.Errorf("parse git date %q: %w", raw, err)
+	}
+	return t.UTC().Format("2006-01-02"), nil
+}
+
+func mergedSearchQuery(date string) string {
+	return fmt.Sprintf("is:pr is:merged merged:>=%s", date)
+}
+
+// ListMergedPRsSince lists PRs merged on or after ref (ISO date YYYY-MM-DD
+// or a git tag resolved via `git log -1 --format=%aI`).
+func (c *Client) ListMergedPRsSince(ref string) ([]policy.PRFacts, error) {
+	date, err := resolveSinceDate(ref, c.Dir)
+	if err != nil {
+		return nil, err
+	}
+	out, err := run("pr", "list", "-R", c.Repo, "--state", "merged",
+		"--search", mergedSearchQuery(date), "--limit", "100", "--json", prJSONFields)
 	if err != nil {
 		return nil, err
 	}
