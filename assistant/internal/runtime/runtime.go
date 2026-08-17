@@ -514,6 +514,78 @@ func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
 	return nil
 }
 
+// RunFlakyDetection comments candidate flaky chainsaw suites on the digest
+// issue. Advisory only: it never edits quarantine/skip-lists.
+func (r *Runner) RunFlakyDetection() error {
+	issueNum := r.cfg.MaintainerDigest.DigestIssueNumber
+	if issueNum <= 0 {
+		return fmt.Errorf("maintainer_digest.digest_issue_number is unset (global halt)")
+	}
+
+	threshold := r.cfg.Flaky.FailureRateThreshold
+	days := r.cfg.Flaky.LookbackDays
+	workflow := r.cfg.Flaky.Workflow
+	if workflow == "" {
+		workflow = "Conformance tests"
+	}
+	if days <= 0 {
+		days = 14
+	}
+
+	runID := audit.NewRunID("flaky")
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "flaky_detection", "entity": "flaky-report",
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{
+		"tool": "github.get_check_run_history", "args": map[string]any{"workflow": workflow, "days": days},
+		"read_only": true,
+	})
+	records, err := r.gh.GetCheckRunHistory(workflow, days)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	cands, err := intel.DetectFlaky(records, threshold)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"tool": "intel.detect_flaky", "error": err.Error()})
+		return err
+	}
+	log.Emit("flaky_candidates", map[string]any{"count": len(cands)})
+
+	now := time.Now()
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "flaky_detection", Repo: r.opts.Repo,
+		RunID: runID, Counters: st.counters, KillSwitch: kill, Now: now,
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionCommentFlakyReport, Target: "flaky-report"}, pctx)
+	r.logDecision(st, policy.ActionCommentFlakyReport, d)
+	if !d.Allowed {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentFlakyReport, "reason": d.DenyReason()})
+		return nil
+	}
+	if len(cands) == 0 {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentFlakyReport, "reason": "no flaky candidates"})
+		return nil
+	}
+	res, err := r.gh.UpsertComment(&d, "issue", issueNum, "flaky-report", renderFlakyReport(runID, cands))
+	r.logAction(st, policy.ActionCommentFlakyReport, res, err)
+	return nil
+}
+
 // ---- LLM insertion points (advisory only) ----
 
 func (r *Runner) advisorySummary(st *runState, pr *policy.PRFacts, body string) string {

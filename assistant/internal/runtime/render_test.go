@@ -139,3 +139,32 @@ func TestRenderDigest(t *testing.T) {
 		t.Fatal("must name the ISO week")
 	}
 }
+
+func TestRenderFlakyReport(t *testing.T) {
+	cands := []intel.FlakyCandidate{
+		{Suite: "assert<script>", FailureRate: 0.4, TotalRuns: 10, RecentFailureSHAs: []string{"deadbeef"}},
+	}
+	out := renderFlakyReport("run-flaky", cands)
+	if !strings.Contains(out, "assert") {
+		t.Fatal("must name the suite")
+	}
+	if !strings.Contains(out, "40%") && !strings.Contains(out, "0.40") && !strings.Contains(out, "40") {
+		t.Fatal("must include failure rate")
+	}
+	if !strings.Contains(out, "chainsaw-tests") && !strings.Contains(out, "quarantined-tests") {
+		t.Fatal("must include a paste-able chainsaw quarantine snippet")
+	}
+	if !strings.Contains(out, "deadbeef") {
+		t.Fatal("must list failing SHAs")
+	}
+	if strings.Contains(out, "<script>") {
+		t.Fatal("suite names must be escaped")
+	}
+	lower := strings.ToLower(out)
+	if strings.Contains(lower, "applied automatically") || strings.Contains(lower, "has been quarantined") {
+		t.Fatal("must not claim quarantine was applied")
+	}
+	if !strings.Contains(lower, "manual") && !strings.Contains(lower, "human") && !strings.Contains(lower, "paste") {
+		t.Fatal("must tell the maintainer to apply the snippet themselves")
+	}
+}

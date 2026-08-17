@@ -201,6 +201,43 @@ func renderPolicyLintResult(runID string, pr *policy.PRFacts, results []sandbox.
 	return b.String()
 }
 
+func renderFlakyReport(runID string, cands []intel.FlakyCandidate) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — flaky suite candidates")
+	w("")
+	w("Advisory only. The assistant **never quarantines a test** (that would edit skip-lists / workflow inputs, which stay in human hands).")
+	w("Paste the snippet below yourself if you agree.")
+	w("")
+	var suites []string
+	for _, c := range cands {
+		suites = append(suites, escapeParam(c.Suite, 80))
+		w("- `%s` — %.0f%% failure rate (%d runs); recent failing SHAs: %s",
+			escapeParam(c.Suite, 80), c.FailureRate*100, c.TotalRuns,
+			escapeParam(strings.Join(shortSHAs(c.RecentFailureSHAs), ", "), 200))
+	}
+	w("")
+	w("**Suggested `chainsaw-tests` quarantine snippet** _(human paste only)_:")
+	w("")
+	w("```yaml")
+	w("# .github/actions/tests/conformance/run inputs — do not apply automatically")
+	w("with:")
+	w("  chainsaw-tests: ''")
+	w("  quarantined-tests: '%s'", strings.Join(suites, ","))
+	w("```")
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
+func shortSHAs(shas []string) []string {
+	out := make([]string, 0, len(shas))
+	for _, s := range shas {
+		out = append(out, short(s))
+	}
+	return out
+}
+
 func renderDigest(runID string, snap digestSnapshot) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }

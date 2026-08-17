@@ -79,3 +79,9 @@ labels:
 # Demo fork: create an issue and put its number here.
 maintainer_digest:
   digest_issue_number: 1
+
+# Flaky detection is advisory: it comments candidates, never edits skip-lists.
+flaky:
+  failure_rate_threshold: 0.15
+  lookback_days: 14
+  workflow: "Conformance tests"

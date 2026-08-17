@@ -173,6 +173,20 @@ func relDir(root, dir string) (string, error) {
 	return "./" + rel, nil
 }
 
+// SuiteFromJobName maps a GitHub Actions job name to a chainsaw suite.
+// Conformance jobs are named after tests-path (test-map.yaml: suite == CI
+// shard), with an optional matrix suffix: "assert (v1.33.7)" → "assert".
+func SuiteFromJobName(job string) string {
+	job = strings.TrimSpace(job)
+	if job == "" {
+		return ""
+	}
+	if i := strings.Index(job, " ("); i > 0 {
+		return job[:i]
+	}
+	return job
+}
+
 // globMatch is the path matcher used by test-map prefixes' glob forms and by
 // CODEOWNERS. Same rules as policy.globMatch: exact, /** prefix, **/ basename,
 // then path.Match. CODEOWNERS reuses this rather than a second matcher.

@@ -51,6 +51,11 @@ type Config struct {
 	MaintainerDigest struct {
 		DigestIssueNumber int `yaml:"digest_issue_number"`
 	} `yaml:"maintainer_digest"`
+	Flaky struct {
+		FailureRateThreshold float64 `yaml:"failure_rate_threshold"`
+		LookbackDays         int     `yaml:"lookback_days"`
+		Workflow             string  `yaml:"workflow"`
+	} `yaml:"flaky"`
 }
 
 // LoadConfig parses and validates. Any error must halt the assistant

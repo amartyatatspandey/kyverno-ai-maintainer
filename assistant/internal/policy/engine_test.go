@@ -396,6 +396,58 @@ func TestPolicyLintPassedLabelAssignable(t *testing.T) {
 	}
 }
 
+func flakyCtx() Context {
+	return Context{
+		Workflow: "flaky_detection", Repo: "amartyatatspandey/kyverno",
+		Now: time.Now(),
+	}
+}
+
+func TestFlakyDetectionGoldenCases(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	cases := []struct {
+		name    string
+		mutate  func(*Context)
+		allowed bool
+		rule    string
+	}{
+		{"happy_path", func(*Context) {}, true, ""},
+		{"kill_switch_denies", func(c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		{"rate_limit_exceeded", func(c *Context) { c.Counters.CommentsTodayEntity = 2 }, false, "comment_budget"},
+		{"wrong_workflow_denied", func(c *Context) { c.Workflow = "maintainer_digest" }, false, "flaky_workflow"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := flakyCtx()
+			tc.mutate(&ctx)
+			d := e.Evaluate(Action{Type: ActionCommentFlakyReport, Target: "flaky-report"}, ctx)
+			if d.Allowed != tc.allowed {
+				t.Fatalf("allowed=%v want %v; trace=%v", d.Allowed, tc.allowed, d.Rules)
+			}
+			if !tc.allowed {
+				got := ""
+				for _, r := range d.Rules {
+					if !r.Pass {
+						got = r.Rule
+						break
+					}
+				}
+				if got != tc.rule {
+					t.Fatalf("failing rule=%q want %q; trace=%v", got, tc.rule, d.Rules)
+				}
+			}
+		})
+	}
+}
+
+func TestFlakyCannotMerge(t *testing.T) {
+	e := NewEngine(testCfg(t))
+	d := e.Evaluate(Action{Type: "merge_pr", Target: "pr/1"}, flakyCtx())
+	if d.Allowed {
+		t.Fatal("merge_pr must be unreachable from flaky_detection")
+	}
+}
+
 func TestLabelRules(t *testing.T) {
 	e := NewEngine(testCfg(t))
 	ctx := Context{Workflow: "issue_triage", Issue: &IssueFacts{Number: 5}, Now: time.Now()}

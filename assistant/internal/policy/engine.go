@@ -84,6 +84,10 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		if !evaluateMaintainerDigest(ctx, add) || !e.commentBudget(add, ctx) {
 			return d
 		}
+	case ActionCommentFlakyReport:
+		if !evaluateFlakyDetection(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
 	case ActionRunPolicyLint:
 		if !evaluateRunPolicyLint(ctx, add) {
 			return d
@@ -111,7 +115,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 
 func githubOp(actionType string) string {
 	switch actionType {
-	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest:
+	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport:
 		return "comment"
 	default:
 		return actionType
@@ -149,6 +153,10 @@ func evaluateReviewerSuggest(ctx Context, add func(string, bool, string) bool) b
 // new counter type. Content of the digest is a runtime decision.
 func evaluateMaintainerDigest(ctx Context, add func(string, bool, string) bool) bool {
 	return add("digest_workflow", ctx.Workflow == "maintainer_digest", "comment_digest requires workflow maintainer_digest")
+}
+
+func evaluateFlakyDetection(ctx Context, add func(string, bool, string) bool) bool {
+	return add("flaky_workflow", ctx.Workflow == "flaky_detection", "comment_flaky_report requires workflow flaky_detection")
 }
 
 // evaluateRunPolicyLint authorizes sandbox execution of kyverno apply/test.

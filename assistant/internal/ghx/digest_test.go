@@ -71,6 +71,28 @@ func TestFailureRatesFromJSON(t *testing.T) {
 	}
 }
 
+func TestRecordsFromJobsJSON(t *testing.T) {
+	raw := []byte(`{"jobs":[
+	  {"name":"assert (v1.33.7)","conclusion":"failure","startedAt":"2026-08-16T00:00:00Z"},
+	  {"name":"mutate (v1.33.7)","conclusion":"success","startedAt":"2026-08-16T00:01:00Z"},
+	  {"name":"lint","conclusion":"skipped","startedAt":"2026-08-16T00:02:00Z"}
+	]}`)
+	created := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	got, err := recordsFromJobsJSON("abc123", created, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d records want 3", len(got))
+	}
+	if got[0].SHA != "abc123" || got[0].JobName != "assert (v1.33.7)" || got[0].Conclusion != "failure" {
+		t.Fatalf("first record %+v", got[0])
+	}
+	if got[1].JobName != "mutate (v1.33.7)" {
+		t.Fatalf("second job %q", got[1].JobName)
+	}
+}
+
 func TestPRFactsFromView_ReusesGetPRFactsShape(t *testing.T) {
 	v := prView{
 		Number: 1, Title: "t", State: "OPEN",

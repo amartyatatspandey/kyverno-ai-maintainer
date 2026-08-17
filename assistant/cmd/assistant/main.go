@@ -6,6 +6,7 @@
 //	assistant run --pr N --workflow reviewer_suggest  # CODEOWNERS / git-log reviewer suggestions
 //	assistant run --pr N --workflow policy_lint --sandbox  # kyverno apply/test on policy-library YAML
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
+//	assistant flaky-report      # comment flaky suite candidates (never auto-quarantines)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
@@ -33,6 +34,8 @@ func main() {
 		cmdRun(os.Args[2:])
 	case "digest":
 		cmdDigest(os.Args[2:])
+	case "flaky-report":
+		cmdFlakyReport(os.Args[2:])
 	case "draft-release-notes":
 		cmdDraftReleaseNotes(os.Args[2:])
 	case "audit":
@@ -120,6 +123,33 @@ func cmdDigest(args []string) {
 		fatal(err)
 	}
 	if err := r.RunMaintainerDigest(); err != nil {
+		fatal(err)
+	}
+	ids, _ := audit.ListRuns(*auditDir)
+	if len(ids) > 0 {
+		evs, _ := audit.ReadEvents(*auditDir, ids[len(ids)-1])
+		fmt.Println(audit.Render(evs))
+	}
+}
+
+// cmdFlakyReport comments candidate flaky chainsaw suites on the digest issue.
+func cmdFlakyReport(args []string) {
+	fs := flag.NewFlagSet("flaky-report", flag.ExitOnError)
+	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
+	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
+	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
+	auditDir := fs.String("audit-dir", "audit", "audit directory")
+	dry := fs.Bool("dry-run", true, "do not execute mutating GitHub calls")
+	fs.Parse(args)
+
+	r, err := runtime.New(runtime.Options{
+		Repo: *repo, ConfigPath: *cfg, MapPath: *tmap, AuditDir: *auditDir,
+		DryRun: *dry,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if err := r.RunFlakyDetection(); err != nil {
 		fatal(err)
 	}
 	ids, _ := audit.ListRuns(*auditDir)
@@ -218,6 +248,7 @@ func usage() {
   assistant run --pr N [--workflow dependency_prs|dco_check|welcome_bot|reviewer_suggest|policy_lint] [--repo owner/name] [--dry-run=false] [--sandbox] [--repo-dir path]
   assistant run --issue N
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
+  assistant flaky-report [--repo owner/name] [--dry-run=false]  # flag flaky suites; never auto-quarantines
   assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop

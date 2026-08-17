@@ -224,6 +224,83 @@ func (c *Client) RecentCheckRunFailureRate(days int) (map[string]float64, error)
 	return failureRatesFromJSON(out, since)
 }
 
+// CheckRunRecord is one job of one workflow run (per-suite granularity).
+type CheckRunRecord struct {
+	SHA        string
+	Conclusion string
+	JobName    string
+	CreatedAt  time.Time
+}
+
+type jobsView struct {
+	Jobs []struct {
+		Name       string    `json:"name"`
+		Conclusion string    `json:"conclusion"`
+		StartedAt  time.Time `json:"startedAt"`
+	} `json:"jobs"`
+}
+
+func recordsFromJobsJSON(sha string, runCreated time.Time, raw []byte) ([]CheckRunRecord, error) {
+	var v jobsView
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	var out []CheckRunRecord
+	for _, j := range v.Jobs {
+		at := j.StartedAt
+		if at.IsZero() {
+			at = runCreated
+		}
+		out = append(out, CheckRunRecord{
+			SHA: sha, Conclusion: j.Conclusion, JobName: j.Name, CreatedAt: at,
+		})
+	}
+	return out, nil
+}
+
+type workflowRunRow struct {
+	DatabaseID int       `json:"databaseId"`
+	HeadSha    string    `json:"headSha"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+// GetCheckRunHistory lists per-job conclusions for a named workflow over
+// `days`. Job names embed the chainsaw suite (see intel.SuiteFromJobName).
+func (c *Client) GetCheckRunHistory(workflowName string, days int) ([]CheckRunRecord, error) {
+	if workflowName == "" {
+		workflowName = "Conformance tests"
+	}
+	if days <= 0 {
+		days = 14
+	}
+	out, err := run("run", "list", "-R", c.Repo, "--workflow", workflowName, "--limit", "40",
+		"--json", "databaseId,headSha,createdAt")
+	if err != nil {
+		return nil, err
+	}
+	var runs []workflowRunRow
+	if err := json.Unmarshal(out, &runs); err != nil {
+		return nil, err
+	}
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	var all []CheckRunRecord
+	for _, r := range runs {
+		if r.CreatedAt.Before(since) {
+			continue
+		}
+		jobsOut, err := run("run", "view", fmt.Sprint(r.DatabaseID), "-R", c.Repo, "--json", "jobs")
+		if err != nil {
+			return all, err
+		}
+		recs, err := recordsFromJobsJSON(r.HeadSha, r.CreatedAt, jobsOut)
+		if err != nil {
+			return all, err
+		}
+		all = append(all, recs...)
+	}
+	return all, nil
+}
+
 type prCommitsView struct {
 	Commits []struct {
 		OID             string `json:"oid"`

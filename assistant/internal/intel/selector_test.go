@@ -53,6 +53,21 @@ func TestSuiteDirChangeSelectsThatSuite(t *testing.T) {
 	}
 }
 
+func TestSuiteFromJobName(t *testing.T) {
+	cases := []struct{ job, want string }{
+		{"assert (v1.33.7)", "assert"},
+		{"assert", "assert"},
+		{"cel-http (v1.34.3)", "cel-http"},
+		{"  mutate (v1.35.1)  ", "mutate"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := SuiteFromJobName(tc.job); got != tc.want {
+			t.Fatalf("SuiteFromJobName(%q)=%q want %q", tc.job, got, tc.want)
+		}
+	}
+}
+
 func TestDocsOnlyChangeSelectsNothing(t *testing.T) {
 	sel := Select(loadTestMap(t), []string{"docs/dev/logging/logging.md"}, "")
 	if len(sel.Suites) != 0 || sel.FullFallback {
