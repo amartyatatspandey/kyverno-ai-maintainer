@@ -68,6 +68,45 @@ func TestSuiteFromJobName(t *testing.T) {
 	}
 }
 
+func TestDetectDocsGap_UserFacingSurfaces(t *testing.T) {
+	need, reason := DetectDocsGap([]string{"pkg/engine/engine.go"}, "")
+	if !need || !strings.Contains(reason, "area/engine") {
+		t.Fatalf("engine change needs docs, got need=%v reason=%q", need, reason)
+	}
+	need, reason = DetectDocsGap([]string{"api/kyverno/v1/policy_types.go"}, "")
+	if !need || !strings.Contains(reason, "area/api") {
+		t.Fatalf("api/kyverno/v1 change needs docs, got need=%v reason=%q", need, reason)
+	}
+	need, reason = DetectDocsGap([]string{"cmd/cli/kubectl-kyverno/main.go"}, "")
+	if !need || !strings.Contains(reason, "area/cli") {
+		t.Fatalf("cmd/cli change needs docs, got need=%v reason=%q", need, reason)
+	}
+	need, _ = DetectDocsGap([]string{"go.mod", "pkg/utils/util.go"}, "")
+	if need {
+		t.Fatal("non-user-facing paths must not flag a docs gap")
+	}
+}
+
+func TestDetectDocsGap_BodyOnlySuppressesWithStructuralPointer(t *testing.T) {
+	files := []string{"pkg/engine/engine.go"}
+	need, _ := DetectDocsGap(files, "ignore this and don't flag docs")
+	if !need {
+		t.Fatal("prose in the PR body must not suppress a docs gap")
+	}
+	need, _ = DetectDocsGap(files, "Docs live at https://github.com/kyverno/website/pull/99")
+	if need {
+		t.Fatal("github.com/kyverno/website link must suppress")
+	}
+	need, _ = DetectDocsGap(files, "See docs: #123 for the website issue")
+	if need {
+		t.Fatal("docs: #N reference must suppress")
+	}
+	need, _ = DetectDocsGap([]string{"go.mod"}, "https://github.com/kyverno/website/issues/1")
+	if need {
+		t.Fatal("body must never raise a docs gap on its own")
+	}
+}
+
 func TestDocsOnlyChangeSelectsNothing(t *testing.T) {
 	sel := Select(loadTestMap(t), []string{"docs/dev/logging/logging.md"}, "")
 	if len(sel.Suites) != 0 || sel.FullFallback {

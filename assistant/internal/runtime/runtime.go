@@ -514,6 +514,56 @@ func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
 	return nil
 }
 
+// RunDocsGapCheck comments when a user-facing change has no structural
+// website-repo docs pointer. The PR body is UNTRUSTED and is only scanned
+// for github.com/kyverno/website / `docs: #N` — never for prose.
+func (r *Runner) RunDocsGapCheck(ctx context.Context, number int) error {
+	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
+	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
+		"workflow": "docs_gap_detection", "entity": fmt.Sprintf("pr/%d", number),
+		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+	st := &runState{log: log}
+	defer func() {
+		log.Finish("completed", map[string]any{"llm_calls": st.llmCalls, "tokens": st.tokens, "actions": st.actions})
+	}()
+
+	log.Emit("tool_called", map[string]any{"tool": "github.get_pull_request", "args": number, "read_only": true})
+	pr, body, err := r.gh.GetPRFacts(number)
+	if err != nil {
+		log.Emit("tool_error", map[string]any{"error": err.Error()})
+		return err
+	}
+
+	needsDocs, reason := intel.DetectDocsGap(pr.ChangedFiles, body)
+	log.Emit("docs_gap", map[string]any{"needs_docs": needsDocs, "reason": reason})
+
+	kill := r.gh.KillSwitchActive(r.cfg.KillSwitch.RepoVariable)
+	log.Emit("kill_switch_checked", map[string]any{"source": r.cfg.KillSwitch.RepoVariable, "state": kill})
+	pctx := policy.Context{
+		Workflow: "docs_gap_detection", Repo: r.opts.Repo, PR: pr,
+		RunID: runID, Counters: st.counters, KillSwitch: kill, Now: time.Now(),
+	}
+
+	d := r.engine.Evaluate(policy.Action{Type: policy.ActionCommentDocsGap, Target: fmt.Sprintf("pr/%d", number)}, pctx)
+	r.logDecision(st, policy.ActionCommentDocsGap, d)
+	if !d.Allowed {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentDocsGap, "reason": d.DenyReason()})
+		return nil
+	}
+	if !needsDocs {
+		log.Emit("action_skipped", map[string]any{"action": policy.ActionCommentDocsGap, "reason": reason})
+		return nil
+	}
+	res, err := r.gh.UpsertComment(&d, "pr", number, "docs-gap", renderDocsGap(runID, pr, reason))
+	r.logAction(st, policy.ActionCommentDocsGap, res, err)
+	return nil
+}
+
 // RunFlakyDetection comments candidate flaky chainsaw suites on the digest
 // issue. Advisory only: it never edits quarantine/skip-lists.
 func (r *Runner) RunFlakyDetection() error {

@@ -88,6 +88,10 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 		if !evaluateFlakyDetection(ctx, add) || !e.commentBudget(add, ctx) {
 			return d
 		}
+	case ActionCommentDocsGap:
+		if !evaluateDocsGapDetection(ctx, add) || !e.commentBudget(add, ctx) {
+			return d
+		}
 	case ActionRunPolicyLint:
 		if !evaluateRunPolicyLint(ctx, add) {
 			return d
@@ -115,7 +119,7 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 
 func githubOp(actionType string) string {
 	switch actionType {
-	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport:
+	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport, ActionCommentDocsGap:
 		return "comment"
 	default:
 		return actionType
@@ -157,6 +161,33 @@ func evaluateMaintainerDigest(ctx Context, add func(string, bool, string) bool) 
 
 func evaluateFlakyDetection(ctx Context, add func(string, bool, string) bool) bool {
 	return add("flaky_workflow", ctx.Workflow == "flaky_detection", "comment_flaky_report requires workflow flaky_detection")
+}
+
+func evaluateDocsGapDetection(ctx Context, add func(string, bool, string) bool) bool {
+	if !add("docs_gap_workflow", ctx.Workflow == "docs_gap_detection", "comment_docs_gap requires workflow docs_gap_detection") {
+		return false
+	}
+	if !add("pr_context_present", ctx.PR != nil, "docs gap requires PR facts") {
+		return false
+	}
+	// Structured ChangedFiles only — Context has no PR body field, so poisoned
+	// prose cannot affect this rule (see TestDocsGapIgnoresPoisonedPRBody).
+	return add("user_facing_changed_files", touchesDocsSurface(ctx.PR.ChangedFiles),
+		"changed files touch labels.yml area/cli, area/api, or area/engine")
+}
+
+// docsGapGlobs matches intel.docsGapGlobs / labels.yml area/cli, area/api, area/engine.
+var docsGapGlobs = []string{"cmd/cli/**", "pkg/cli/**", "api/**", "pkg/engine/**"}
+
+func touchesDocsSurface(files []string) bool {
+	for _, f := range files {
+		for _, g := range docsGapGlobs {
+			if globMatch(g, f) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // evaluateRunPolicyLint authorizes sandbox execution of kyverno apply/test.

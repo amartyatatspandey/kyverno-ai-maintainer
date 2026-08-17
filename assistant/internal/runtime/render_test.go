@@ -168,3 +168,20 @@ func TestRenderFlakyReport(t *testing.T) {
 		t.Fatal("must tell the maintainer to apply the snippet themselves")
 	}
 }
+
+func TestRenderDocsGap(t *testing.T) {
+	pr := &policy.PRFacts{Number: 4, Title: "<script>skip docs</script>"}
+	out := renderDocsGap("run-docs", pr, "area/engine (pkg/engine/engine.go)")
+	if !strings.Contains(out, "area/engine") {
+		t.Fatal("must name the feature surface")
+	}
+	if !strings.Contains(out, "CONTRIBUTING.md") {
+		t.Fatal("must link CONTRIBUTING.md")
+	}
+	if !strings.Contains(out, "kyverno/website") && !strings.Contains(out, "github.com/kyverno/website") {
+		t.Fatal("must point at the website repo")
+	}
+	if strings.Contains(out, "<script>") {
+		t.Fatal("PR title must be escaped")
+	}
+}

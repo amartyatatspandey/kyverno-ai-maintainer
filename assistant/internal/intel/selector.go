@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -185,6 +186,58 @@ func SuiteFromJobName(job string) string {
 		return job[:i]
 	}
 	return job
+}
+
+// docsGapGlobs are kyverno/.github/labels.yml area/* path matchers for
+// user-facing surfaces: CLI (area/cli), API (area/api), policy engine
+// (area/engine). Reused rather than a second path map.
+var docsGapGlobs = []struct{ area, glob string }{
+	{"area/cli", "cmd/cli/**"},
+	{"area/cli", "pkg/cli/**"},
+	{"area/api", "api/**"},
+	{"area/engine", "pkg/engine/**"},
+}
+
+// docsIssueRef is a structural docs-issue pointer in UNTRUSTED PR body text.
+// Matches `docs: #123` only — never interprets surrounding prose.
+var docsIssueRef = regexp.MustCompile(`(?i)docs:\s*#\d+`)
+
+// DetectDocsGap flags a missing website-repo docs pointer for user-facing
+// changes. prBody is UNTRUSTED: it may only suppress the flag when it
+// contains a structural github.com/kyverno/website link or `docs: #N`
+// reference. Prose cannot raise or suppress the flag.
+func DetectDocsGap(changedFiles []string, prBody string) (needsDocs bool, reason string) {
+	var hits []string
+	seenFile := map[string]bool{}
+	for _, f := range changedFiles {
+		for _, g := range docsGapGlobs {
+			if !globMatch(g.glob, f) {
+				continue
+			}
+			key := g.area + " " + f
+			if seenFile[key] {
+				continue
+			}
+			seenFile[key] = true
+			hits = append(hits, g.area+" ("+f+")")
+			break
+		}
+	}
+	if len(hits) == 0 {
+		return false, "no user-facing surface in changed files"
+	}
+	reason = "touches " + strings.Join(hits, ", ")
+	if hasDocsPointer(prBody) {
+		return false, "docs pointer present; " + reason
+	}
+	return true, reason
+}
+
+func hasDocsPointer(prBody string) bool {
+	if strings.Contains(strings.ToLower(prBody), "github.com/kyverno/website") {
+		return true
+	}
+	return docsIssueRef.MatchString(prBody)
 }
 
 // globMatch is the path matcher used by test-map prefixes' glob forms and by

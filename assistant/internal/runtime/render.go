@@ -201,6 +201,24 @@ func renderPolicyLintResult(runID string, pr *policy.PRFacts, results []sandbox.
 	return b.String()
 }
 
+func renderDocsGap(runID string, pr *policy.PRFacts, reason string) string {
+	var b strings.Builder
+	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
+	w("### Kyverno AI Maintainer Assistant — docs gap")
+	w("")
+	w("This PR looks like a user-facing change (%s) without a linked documentation issue/PR on the website repo.", escapeParam(reason, 300))
+	if pr != nil && pr.Title != "" {
+		w("")
+		w("PR: #%d — %s", pr.Number, escapeParam(pr.Title, 200))
+	}
+	w("")
+	w("Please open (or link) a corresponding docs issue/PR on [kyverno/website](https://github.com/kyverno/website).")
+	w("See [CONTRIBUTING.md](CONTRIBUTING.md) (docs-PR requirement) and [AGENTS.md](AGENTS.md) Pull Request Guidelines: new/changed functionality needs a corresponding documentation issue/PR on the website repo.")
+	w("")
+	w("_Run `%s`. To stop the assistant: add the `ai-hold` label, or set repo variable `AI_MAINTAINER_PAUSED=true`._", runID)
+	return b.String()
+}
+
 func renderFlakyReport(runID string, cands []intel.FlakyCandidate) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
