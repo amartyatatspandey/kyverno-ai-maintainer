@@ -50,7 +50,7 @@ Thirteen workflows total, all running through the same policy/audit/ghx substrat
 | `discussion_qa` | Answer GitHub Discussions from a local docs index, dual-gated on model confidence *and* deterministic retrieval score | comment |
 | `issue_repro` | Extract + validate issue-body YAML, then run a scripted sandbox reproduction | comment, label |
 
-Only `dependency_prs` can merge. Everything else is comment/label only — the merge path is exactly as narrow as it was in the original POC; growth happened around it, not to it. Two workflows are deliberately **designed but not built** — see [SECURITY_ADVISORY_TRIAGE.md](SECURITY_ADVISORY_TRIAGE.md) and [AUTO_BACKPORT.md](AUTO_BACKPORT.md) for why (severity judgment and release-branch writes are higher-consequence surfaces than this pass's risk budget covers).
+Only `dependency_prs` can merge. Everything else is comment/label only — the merge path is exactly as narrow as it was in the original POC; growth happened around it, not to it. Two workflows are deliberately **designed but not built** — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) and [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for why (severity judgment and release-branch writes are higher-consequence surfaces than this pass's risk budget covers).
 
 ## Measured results
 
@@ -61,29 +61,32 @@ Only `dependency_prs` can merge. Everything else is comment/label only — the m
 | Injection vectors contained | **7/7** (original pass) **+ 10** (W5/W6/W8 additions), all asserted on policy decisions, not model refusals |
 | Automated test cases | **204**, green (`go test ./...`), including 84 policy-layer golden/injection cases across all 13 workflows |
 
-Full detail — including a metric I had to correct and one genuine miss — in [EVAL_RESULTS.md](EVAL_RESULTS.md).
+Full detail — including a metric I had to correct and one genuine miss — in [EVAL_RESULTS.md](docs/EVAL_RESULTS.md).
 
 ## Repository map
 
+Design, eval, and discovery docs live in [`docs/`](docs/).
+
 | Document | What it is |
 |---|---|
-| [NOTES.md](NOTES.md) | Phase 1 discovery: what the Kyverno repo actually contains, with citations |
-| [PROBLEM_MAP.md](PROBLEM_MAP.md) | Per-workflow specs and what was dropped (and why) |
-| [RISKS.md](RISKS.md) | 26 failure modes with likelihood/impact/detection/mitigation/residual |
-| [TRUST_MODEL.md](TRUST_MODEL.md) | Trust zones, boundary-crossing rules, actor table |
-| [DECISIONS.md](DECISIONS.md) | Architecture decisions + rejected alternatives (D-001…D-007) |
-| [MCP_TOOLS.md](MCP_TOOLS.md) | The 13-tool capability surface, and what is deliberately absent |
-| [POLICY_ENGINE.md](POLICY_ENGINE.md) | Authorization design + config schema |
-| [SANDBOX.md](SANDBOX.md) | Isolation design, limits, and the hostile-input hot path |
-| [POC_SCOPE.md](POC_SCOPE.md) | Final scope commitment |
-| [BASELINE.md](BASELINE.md) | Current-state measurements + success metrics |
-| [EVAL_HARNESS.md](EVAL_HARNESS.md) / [EVAL_RESULTS.md](EVAL_RESULTS.md) | Evaluation design and measured results |
-| [AUDIT.md](AUDIT.md) / [OVERRIDE.md](OVERRIDE.md) | Audit records; the seven human-control mechanisms |
-| [INJECTION_TESTS.md](INJECTION_TESTS.md) / [INJECTION_RESULTS.md](INJECTION_RESULTS.md) | Prompt-injection plan and results |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Component/flow/sequence diagrams, permission model, self-critique |
-| [ASSUMPTIONS.md](ASSUMPTIONS.md) / [QUESTIONS.md](QUESTIONS.md) | What's unverified; what needs a maintainer's answer |
-| [DEMO_SCRIPT.md](DEMO_SCRIPT.md) | Demo narrative |
-| [SECURITY_ADVISORY_TRIAGE.md](SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](AUTO_BACKPORT.md) | Design-only specs — why these two stay unbuilt this pass |
+| [problem_description.md](docs/problem_description.md) | Original problem statement and proposed scope |
+| [NOTES.md](docs/NOTES.md) | Phase 1 discovery: what the Kyverno repo actually contains, with citations |
+| [PROBLEM_MAP.md](docs/PROBLEM_MAP.md) | Per-workflow specs and what was dropped (and why) |
+| [RISKS.md](docs/RISKS.md) | 26 failure modes with likelihood/impact/detection/mitigation/residual |
+| [TRUST_MODEL.md](docs/TRUST_MODEL.md) | Trust zones, boundary-crossing rules, actor table |
+| [DECISIONS.md](docs/DECISIONS.md) | Architecture decisions + rejected alternatives (D-001…D-007) |
+| [MCP_TOOLS.md](docs/MCP_TOOLS.md) | The 13-tool capability surface, and what is deliberately absent |
+| [POLICY_ENGINE.md](docs/POLICY_ENGINE.md) | Authorization design + config schema |
+| [SANDBOX.md](docs/SANDBOX.md) | Isolation design, limits, and the hostile-input hot path |
+| [POC_SCOPE.md](docs/POC_SCOPE.md) | Final scope commitment |
+| [BASELINE.md](docs/BASELINE.md) | Current-state measurements + success metrics |
+| [EVAL_HARNESS.md](docs/EVAL_HARNESS.md) / [EVAL_RESULTS.md](docs/EVAL_RESULTS.md) | Evaluation design and measured results |
+| [AUDIT.md](docs/AUDIT.md) / [OVERRIDE.md](docs/OVERRIDE.md) | Audit records; the seven human-control mechanisms |
+| [INJECTION_TESTS.md](docs/INJECTION_TESTS.md) / [INJECTION_RESULTS.md](docs/INJECTION_RESULTS.md) | Prompt-injection plan and results |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component/flow/sequence diagrams, permission model, self-critique |
+| [ASSUMPTIONS.md](docs/ASSUMPTIONS.md) / [QUESTIONS.md](docs/QUESTIONS.md) | What's unverified; what needs a maintainer's answer |
+| [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Demo narrative |
+| [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) | Design-only specs — why these two stay unbuilt this pass |
 
 ## Code
 
@@ -107,4 +110,4 @@ eval/                50 Dependabot PRs, 30 code PRs, 30 issues — real history
 
 ## Status
 
-POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection is advisory-only until selection recall is measured. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Not built: webhook ingestion (polling/manual trigger only), MCP-over-protocol serving (in-process Go interfaces for now).
+POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection is advisory-only until selection recall is measured. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Not built: webhook ingestion (polling/manual trigger only), MCP-over-protocol serving (in-process Go interfaces for now).
