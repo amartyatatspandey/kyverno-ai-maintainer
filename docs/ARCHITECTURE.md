@@ -81,7 +81,7 @@ Sequence for triage-lite is the degenerate case: get_issue → classify (LLM) �
 Honest note: `contents:write` (required by merge) is the App's broadest grant — mitigated by branch protection on `main`/`release-*` (unverified upstream, ASSUMPTIONS #1; **on the demo fork we configure it ourselves and show it**) and by the policy layer. This is the permission a reviewer should probe hardest; say so in the video.
 
 ## Failure-mode summary
-Top residuals (RISKS.md): G1 compromised-green patch bump (bounded: allowlisted paths, rate limit, 1-command revert; stricter than the human status quo), A2 advisory-text poisoning (contained, demonstrated by I5), S1 privileged-DinD escape (credential-free sandbox, VM roadmap), T1 selection recall <100% (advisory-only until measured). Eval plan: EVAL_HARNESS.md (110 real historical cases collected); injection plan: INJECTION_TESTS.md (10 vectors).
+Top residuals (RISKS.md): G1 compromised-green patch bump (bounded: allowlisted paths, rate limit, 1-command revert; stricter than the human status quo), A2 advisory-text poisoning (contained, demonstrated by I5), S1 privileged-DinD escape (credential-free sandbox, VM roadmap), T1 selection recall 79% path-exercise / 61% mapped-only (advisory; below 90%). Eval plan: EVAL_HARNESS.md (110 real historical cases collected); injection plan: INJECTION_TESTS.md (10 vectors).
 
 ## Final POC scope
 Per POC_SCOPE.md: primary dependency flow (all 7 pillars), triage-lite secondary, W5 built, webhook adapter shipped on the same run entrypoint (D-004). OPA/VM remain roadmap. Implementation order (Phase 16): policy engine+tests → audit → intel/selector → GitHub layer → runtime+LLM → sandbox → E2E dry-run → injection pass → live demo runs.

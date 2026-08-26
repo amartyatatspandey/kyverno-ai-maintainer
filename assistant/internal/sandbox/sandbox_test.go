@@ -11,6 +11,32 @@ import (
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/repro"
 )
 
+func TestChainsawCommandTemplate(t *testing.T) {
+	cmd, err := chainsawCommand("assert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"chainsaw", "test", "--test-dir", "test/conformance/chainsaw/assert"}
+	if strings.Join(cmd, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %v want %v", cmd, want)
+	}
+}
+
+func TestChainsawCommandRejectsTraversal(t *testing.T) {
+	for _, s := range []string{"", "../etc", "foo/bar", "assert;id", "_templates"} {
+		if _, err := chainsawCommand(s); err == nil {
+			t.Fatalf("expected reject %q", s)
+		}
+	}
+}
+
+func TestRunChainsawSuitesRequiresEnabled(t *testing.T) {
+	r := &Runner{Enabled: false}
+	if _, err := r.RunChainsawSuites(t.Context(), []string{"assert"}, time.Second); err == nil {
+		t.Fatal("disabled runner must error")
+	}
+}
+
 func TestLintCommandKyvernoTestManifest(t *testing.T) {
 	cmd := lintCommand("", "test/cli/test/simple/kyverno-test.yaml")
 	if len(cmd) < 3 || cmd[0] != "kyverno" || cmd[1] != "test" || cmd[2] != "test/cli/test/simple" {

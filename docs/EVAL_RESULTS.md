@@ -38,9 +38,26 @@ The 4 rate-limiter closures are themselves evidence *for* the assistant: they we
 | **Conformance compute reduction** | **61%** (vs. 3,068 job-minutes / 342 jobs baseline) |
 | Full-suite fallbacks (unmapped paths) | 11 of 30 (37%) |
 | PRs needing zero conformance suites | 5 |
+| **Selection recall (path-exercise proxy)** | **79%** suite-level (23 scored / 7 unscored); **61%** mapped-only (excl. FullFallback) |
+| Case coverage (needed ⊆ selected) | 61% all scored; 36% mapped-only |
+| Wall clock (static 30-case run) | **1 ms** (`go run ./cmd/recall-eval --recompute`; no sandbox) |
 
-Meets the ≥60% BASELINE.md target, but the honest read is that **37% fallback rate is the headline weakness**: the path→suite map covers the common areas and nothing else, and every unmapped path forces a full run by design (fail-safe). The measured 61% is therefore a floor — map coverage is the single highest-leverage improvement, and the fallback rate is the metric that tracks it.
+Meets the ≥60% BASELINE.md *compute-reduction* target, but the honest read is that **37% fallback rate is the headline weakness**: the path→suite map covers the common areas and nothing else, and every unmapped path forces a full run by design (fail-safe). The measured 61% is therefore a floor — map coverage is the single highest-leverage improvement, and the fallback rate is the metric that tracks it.
 
-Selection recall against historical failing suites (the T1 metric) is **not yet measured** — it needs per-commit check-run archaeology (EVAL_HARNESS.md pilot). Until it is, scoped selection stays advisory-only, exactly as specified.
+Selection recall is now measured, but **not** against historical failing conformance jobs — that protocol died with the CI-trigger change (EVAL_HARNESS.md). The number above is a **path-exercise proxy**: of suites whose names appear in the changed paths (or a conventional-area table independent of `test-map.yaml`), what fraction did `intel.Select` include? Command: `go run ./cmd/recall-eval`; cache: `eval/w3_ground_truth.json`. Sandbox/chainsaw execution is optional (`--sandbox --repo-dir`, `--pilot 5` first) and was **not** run for this figure — no Kyverno checkout is in this workspace, and a 52-suite KinD matrix is not a practical local budget. Merged PRs would typically produce empty failure-sets anyway.
+
+**W3 stays advisory.** 79% (61% mapped-only) is below the ≥90% BASELINE.md target, and a proxy is not historical-failure recall.
+
+### Finding 3 — the map misses suites that share a path segment with the change
+Nine scored misses, four gaps, all visible without executing tests:
+
+| Gap | Cases | Map longest-prefix | Path-exercise `needed` |
+|---|---|---|---|
+| `ttl` suite exists | #17104, #17034, #17032 | `pkg/controllers/` → assert, generate | `ttl` |
+| `webhooks` suite exists | #17091, #17087 | `pkg/webhooks/` → assert, mutate, policy-validation | `webhooks` |
+| `webhook-configurations` | #17072, #17069 | `pkg/controllers/` → assert, generate | `webhook-configurations` |
+| `generating-policies` | #17064, #17061 | `pkg/background/` → background-only, generate | `generating-policies` |
+
+The 7 unscored cases are 3 Helm-chart cuts, 2 `.github/workflows` CI files, and 2 `pkg/metrics/`-only PRs — no chainsaw suite name in the path and no conventional-area row. FullFallback on unmapped paths (`pkg/image/`, `pkg/validation/`, mixed extras) inflates the all-case 79%; mapped-only 61% is the number that tracks map quality.
 
 ## Injection pass (Phase 14): see INJECTION_RESULTS.md — 7/7 vectors contained.

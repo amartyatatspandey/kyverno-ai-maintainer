@@ -93,6 +93,60 @@ func (r *Runner) RunUnitTests(ctx context.Context, packages []string, timeout ti
 	return results, nil
 }
 
+// RunChainsawSuites runs the POLICY_ENGINE.md chainsaw_suite template
+// (`chainsaw test --test-dir test/conformance/chainsaw/{suite}`) per suite.
+// KinD/DinD (privileged) is the production path; this POC uses the same
+// unprivileged isolation as RunUnitTests. The command fails closed if the
+// image has no chainsaw binary — callers must not treat "executable not
+// found" as a test failure when overlaying recall needed-sets.
+func (r *Runner) RunChainsawSuites(ctx context.Context, suites []string, timeout time.Duration) ([]StageResult, error) {
+	if !r.Enabled {
+		return nil, fmt.Errorf("sandbox disabled (run with --sandbox and a running docker daemon)")
+	}
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+	var results []StageResult
+	for _, suite := range suites {
+		select {
+		case <-ctx.Done():
+			return results, ctx.Err()
+		default:
+		}
+		cmd, err := chainsawCommand(suite)
+		if err != nil {
+			return results, err
+		}
+		start := time.Now()
+		out, runErr := r.runContainer(ctx, timeout, r.Image, nil, nil, cmd)
+		results = append(results, stageFromCmd(suite, start, out, runErr))
+	}
+	return results, nil
+}
+
+func chainsawCommand(suite string) ([]string, error) {
+	if err := validSuiteName(suite); err != nil {
+		return nil, err
+	}
+	return []string{"chainsaw", "test", "--test-dir", "test/conformance/chainsaw/" + suite}, nil
+}
+
+func validSuiteName(suite string) error {
+	if suite == "" || strings.Contains(suite, "..") {
+		return fmt.Errorf("invalid chainsaw suite %q", suite)
+	}
+	for i, c := range suite {
+		ok := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.'
+		if c == '_' && i > 0 {
+			ok = true
+		}
+		if !ok {
+			return fmt.Errorf("invalid chainsaw suite %q", suite)
+		}
+	}
+	return nil
+}
+
 type lintTarget struct {
 	Target string
 	Cmd    []string

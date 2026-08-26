@@ -40,7 +40,7 @@ The same tools are also served over the MCP protocol (`assistant mcp`, stdio, of
 ### 6. `kyverno.get_affected_tests`
 - **Purpose:** THE repo-intelligence tool for W3. Deterministic mapping executed server-side.
 - **In:** `{changed_files[]}` → **Out:** `{unit_packages[] (reverse import closure), chainsaw_suites[] (path→suite map), unmapped_files[], mapping_version}`.
-- **Wrong:** map staleness/gaps → `unmapped_files` forces the full-suite fallback rule; recall measured in Phase 11 (T1). LLM may union extra suites on top, never subtract (A6).
+- **Wrong:** map staleness/gaps → `unmapped_files` forces the full-suite fallback rule; path-exercise recall measured (T1 / EVAL_RESULTS Finding 3) — still advisory. LLM may union extra suites on top, never subtract (A6).
 
 ### 7. `kyverno.get_label_taxonomy`
 - **Purpose:** W4's allowed-label vocabulary with descriptions, derived from `.github/labels.yml`, minus privileged labels (`security`, `good first issue`, release/milestone labels).

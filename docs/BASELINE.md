@@ -36,7 +36,7 @@
 ### W3 — scoped tests
 | Metric | Definition | Target |
 |---|---|---|
-| Selection recall | historical PRs with a conformance failure: did selection include ≥1 actually-failing suite? | ≥ 90% measured; report per-area breakdown |
+| Selection recall | path-exercise proxy (EVAL_HARNESS.md revised protocol): of suites that exercise the same package paths as the change, what fraction did selection include? Historical failing-check-run recall is unavailable — conformance no longer runs on PRs. | ≥ 90% measured; report mapped-only separately. **Measured 2026-08-26: 79% suite-level / 61% mapped-only** (EVAL_RESULTS.md). W3 stays advisory. |
 | Compute reduction | job-minutes selected / 3,068 post-merge full-suite baseline, per eval PR class | ≥ 60% median (est. 70–85%; measure decides) |
 | Full-suite fallback rate | runs where unmapped files forced full selection | measured (map-coverage health) |
 | Selection-size inflation | LLM-widened vs deterministic-only size | measured (detects A6) |

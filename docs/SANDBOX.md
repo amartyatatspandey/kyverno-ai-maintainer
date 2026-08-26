@@ -60,3 +60,7 @@ What actually happens when an issue author supplies `policy.yaml` + `resource.ya
 6. Evidence comment contains: versions used, applied/admission results, actual vs expected, bounded log excerpt, image digest — enough for a maintainer to trust or re-run it.
 
 **POC must-have:** container-per-run, limits, no-credential rule, RO workspace, cleanup+reaper, kill paths, unit-test runs with `--network=none`. **Nice-to-have:** egress allowlist proxying (vs. simple off/on), disk watchdog. **Demo theater (but earns its screen time):** showing `docker stats` caps + the kill switch stopping a live run on camera. **Not built (roadmap):** VM-per-run isolation, K8s Job execution backend.
+
+## Chainsaw suite template (W3 recall)
+
+`Runner.RunChainsawSuites` implements the POLICY_ENGINE.md `chainsaw_suite` command (`chainsaw test --test-dir test/conformance/chainsaw/{suite}`), with suite names validated against path traversal. Production KinD is privileged DinD (above). The POC invocation uses the same unprivileged isolation as `RunUnitTests` and fails closed if the image has no `chainsaw` binary. `cmd/recall-eval --chainsaw` must not treat "executable not found" as a test failure when overlaying the needed-set. Full 52-suite KinD is not a practical local budget; the comparison set is selected ∪ path-exercise (EVAL_HARNESS.md).

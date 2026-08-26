@@ -23,6 +23,10 @@ cd assistant && go run ./cmd/assistant run --pr 17118 --workflow dco_check --rep
 cd assistant && go run ./cmd/eval
 ```
 
+```bash
+cd assistant && go run ./cmd/recall-eval --pilot 5   # W3 path-exercise recall; --recompute to rewrite the cache
+```
+
 `go run ./cmd/assistant` also exposes `digest`, `flaky-report`, and `draft-release-notes` as standalone subcommands (no `--pr`/`--issue` target), and `run --issue N --repro` / `run --discussion N` for the two other non-PR-shaped workflows — see `assistant run -h` or the [Code](#code) tree below for the full list.
 
 Model provider is pluggable (BYOM): `AI_PROVIDER=anthropic|openai|stub`, `AI_MODEL=...`; `openai` also covers vLLM/Ollama/OpenRouter via `OPENAI_BASE_URL`. Default is a deterministic stub so tests and CI never need a key.
@@ -58,8 +62,9 @@ Only `dependency_prs` can merge. Everything else is comment/label only — the m
 |---|---|
 | Unsafe merges across 50 real historical Dependabot PRs | **0** |
 | Conformance compute reduction across 30 real merged PRs | **61%** (vs 342 jobs / ~3,068 job-minutes) |
+| Selection recall (path-exercise proxy, 23 scored cases) | **79%** suite-level; **61%** mapped-only — W3 stays advisory |
 | Injection vectors contained | **7/7** (original pass) **+ 10** (W5/W6/W8 additions), all asserted on policy decisions, not model refusals |
-| Automated test cases | **204**, green (`go test ./...`), including 84 policy-layer golden/injection cases across all 13 workflows |
+| Automated test cases | **233**, green (`go test ./...`), including 85 policy-layer golden/injection cases across all 13 workflows |
 
 Full detail — including a metric I had to correct and one genuine miss — in [EVAL_RESULTS.md](docs/EVAL_RESULTS.md).
 
@@ -94,7 +99,8 @@ Design, eval, and discovery docs live in [`docs/`](docs/).
 assistant/
   cmd/assistant/     CLI: run --pr N | --issue N [--repro] | --discussion N, digest, flaky-report,
                      draft-release-notes, serve (webhook), mcp (stdio), audit show|why|list, stop
-  cmd/eval/          replays historical cases, prints the metrics
+  cmd/eval/          replays historical cases, prints the metrics (including cached W3 recall)
+  cmd/recall-eval/   W3 path-exercise recall; writes eval/w3_ground_truth.json (--pilot, --sandbox)
   internal/policy/   deterministic authorization (deny-by-default) + golden tests, 13 workflows
   internal/intel/    path→suite map, reverse import closure, CODEOWNERS/git-log reviewer suggest,
                      flaky-suite detection, docs-gap detection, local TF-IDF docs index
@@ -107,9 +113,9 @@ assistant/
   internal/webhook/  GitHub webhook adapter (HMAC-SHA256, delivery-ID dedupe) → same run entrypoint
   internal/mcpserver/ MCP protocol server (stdio); mutating tools still hit Engine.Evaluate
   config/            ai-maintainer.yaml (policy), test-map.yaml (repo intelligence)
-eval/                50 Dependabot PRs, 30 code PRs, 30 issues — real history
+eval/                50 Dependabot PRs, 30 code PRs, 30 issues — real history; w3_ground_truth.json is the recall cache
 ```
 
 ## Status
 
-POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection is advisory-only until selection recall is measured. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Webhook ingestion ships as `assistant serve` (HMAC-verified adapter on the same run entrypoint as CLI/poll). MCP-over-protocol serving ships as `assistant mcp` (stdio; mutating tools still go through `Engine.Evaluate`).
+POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection stays advisory: path-exercise recall is measured at 79% (61% mapped-only; EVAL_RESULTS.md Finding 3) — below the 90% target, and a proxy rather than historical-failure recall. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Webhook ingestion ships as `assistant serve` (HMAC-verified adapter on the same run entrypoint as CLI/poll). MCP-over-protocol serving ships as `assistant mcp` (stdio; mutating tools still go through `Engine.Evaluate`).

@@ -1,5 +1,7 @@
 // Command eval replays historical Kyverno cases through the real policy engine
-// and selector, then reports the metrics defined in BASELINE.md.
+// and selector, then reports the metrics defined in BASELINE.md. W3 path-exercise
+// recall is computed by cmd/recall-eval and only *printed* from the cache here
+// so this command stays cheap.
 //
 //	go run ./cmd/eval --cases ../eval/w1_dependabot_cases.json --w3 ../eval/w3_selection_cases.json
 package main
@@ -47,6 +49,7 @@ func main() {
 	w3 := flag.String("w3", "../eval/w3_selection_cases.json", "W3 cases")
 	cfgPath := flag.String("config", "config/ai-maintainer.yaml", "policy config")
 	mapPath := flag.String("map", "config/test-map.yaml", "test map")
+	recallCache := flag.String("recall-cache", "../eval/w3_ground_truth.json", "W3 recall cache from cmd/recall-eval")
 	flag.Parse()
 
 	cfg, err := policy.LoadConfig(*cfgPath)
@@ -159,6 +162,21 @@ func main() {
 		fallbacks, 100*float64(fallbacks)/float64(len(wcs)))
 	fmt.Printf("PRs needing zero conformance suites: %d\n", zeroSuite)
 	fmt.Printf("baseline: 342 jobs / ~3068 job-minutes per full conformance run\n")
+
+	fmt.Println()
+	if gt := loadRecallCache(*recallCache); gt != nil {
+		fmt.Print(intel.FormatGroundTruth(gt))
+	} else {
+		fmt.Println("W3 selection recall: not cached (run go run ./cmd/recall-eval)")
+	}
+}
+
+func loadRecallCache(path string) *intel.GroundTruth {
+	var gt intel.GroundTruth
+	if err := readJSON(path, &gt); err != nil || gt.Methodology == "" {
+		return nil
+	}
+	return &gt
 }
 
 func firstFailedRule(d policy.Decision) string {
