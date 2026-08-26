@@ -707,6 +707,10 @@ func (c *Client) MergePR(d *policy.Decision, number int, method string) (string,
 	if c.DryRun {
 		return "(dry-run) would squash-merge PR " + fmt.Sprint(number) + " at " + d.BoundSHA, nil
 	}
+	// sha=d.BoundSHA isn't just recorded locally — GitHub's own merge API
+	// rejects this call if the PR's real head no longer matches it. So the
+	// SHA-binding story isn't only "our code checked a timestamp"; GitHub
+	// enforces the same thing independently, on its side, from our request.
 	out, err := run("api", "-X", "PUT", fmt.Sprintf("repos/%s/pulls/%d/merge", c.Repo, number),
 		"-f", "merge_method="+method, "-f", "sha="+d.BoundSHA)
 	if err != nil {

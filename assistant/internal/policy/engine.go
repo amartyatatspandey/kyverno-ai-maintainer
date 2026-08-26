@@ -332,6 +332,9 @@ func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ct
 		return false
 	}
 	add("no_deny_labels", true, "labels ∩ deny = ∅")
+	// Deliberately placed after the higher-severity checks above, not first:
+	// a diff already denied for touching a protected path or failing checks
+	// shouldn't also need a fresh open-PR lookup just to get the same DENY.
 	if am.NoCompetingPR {
 		if len(pr.CompetingPRs) > 0 {
 			add("no_competing_pr", false, "overlapping open PR(s): "+formatPRNums(pr.CompetingPRs))

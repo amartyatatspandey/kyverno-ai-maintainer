@@ -148,6 +148,10 @@ func (r *Runner) RunDependencyPR(ctx context.Context, number int) error {
 	})
 
 	// --- sandboxed scoped tests (policy-gated) ---
+	// First appearance of the shape every mutating step in this file follows:
+	// Evaluate -> log the decision either way -> act only if Allowed. Same
+	// four lines recur below for comment/set_labels/merge_pr — nothing here
+	// ever acts on its own opinion of what should happen.
 	var testResults []sandbox.StageResult
 	if r.opts.UseSandbox && len(sel.UnitPackages) > 0 {
 		d := r.engine.Evaluate(policy.Action{Type: "run_scoped_tests", Target: fmt.Sprintf("pr/%d", number)}, pctx)
