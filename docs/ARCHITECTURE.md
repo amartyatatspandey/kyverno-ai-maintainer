@@ -7,7 +7,8 @@ Consolidates: TRUST_MODEL.md (trust boundaries), MCP_TOOLS.md (capability surfac
 ```mermaid
 flowchart LR
     subgraph HOST["assistant (single Go binary, D-004)"]
-        CLI[cmd: run / poll / audit / eval]
+        CLI[cmd: run / poll / serve / audit / eval]
+        WH[webhook adapter<br/>HMAC + delivery-ID dedupe]
         RT[runtime<br/>run loop, budgets]
         LLMP[llm providers<br/>anthropic / openai / stub — BYOM]
         TOOLS[tool layer<br/>12 tools, schema-validated]
@@ -21,6 +22,7 @@ flowchart LR
     CFG[.github/ai-maintainer.yaml]
 
     CLI --> RT --> LLMP
+    WH --> RT
     RT <--> TOOLS
     TOOLS --> INTEL
     TOOLS -- mutating --> POL --> EXEC --> GH
@@ -38,7 +40,7 @@ GitHub PR facts + diff → deterministic classifier → context; changelog/diff 
 
 ```mermaid
 sequenceDiagram
-    participant P as poll/manual
+    participant P as poll/manual/webhook
     participant R as runtime
     participant L as LLM
     participant T as tools
@@ -82,7 +84,7 @@ Honest note: `contents:write` (required by merge) is the App's broadest grant �
 Top residuals (RISKS.md): G1 compromised-green patch bump (bounded: allowlisted paths, rate limit, 1-command revert; stricter than the human status quo), A2 advisory-text poisoning (contained, demonstrated by I5), S1 privileged-DinD escape (credential-free sandbox, VM roadmap), T1 selection recall <100% (advisory-only until measured). Eval plan: EVAL_HARNESS.md (110 real historical cases collected); injection plan: INJECTION_TESTS.md (10 vectors).
 
 ## Final POC scope
-Per POC_SCOPE.md: primary dependency flow (all 7 pillars), triage-lite secondary, W5/webhooks/OPA/VM on roadmap. Implementation order (Phase 16): policy engine+tests → audit → intel/selector → GitHub layer → runtime+LLM → sandbox → E2E dry-run → injection pass → live demo runs.
+Per POC_SCOPE.md: primary dependency flow (all 7 pillars), triage-lite secondary, W5 built, webhook adapter shipped on the same run entrypoint (D-004). OPA/VM remain roadmap. Implementation order (Phase 16): policy engine+tests → audit → intel/selector → GitHub layer → runtime+LLM → sandbox → E2E dry-run → injection pass → live demo runs.
 
 ## Self-critique
 
@@ -100,7 +102,7 @@ Per POC_SCOPE.md: primary dependency flow (all 7 pillars), triage-lite secondary
 
 **What would an agent-infra engineer object to?**
 1. *"Your MCP layer is in-process Go interfaces, not an actual MCP server"* — correct and deliberate for the POC (D-004: fewer moving parts, same contract). The tool schema is MCP-shaped; serving it over the protocol is a thin adapter, on the roadmap, and required for the "any agent runtime" story to be literal rather than architectural.
-2. *"Polling, not webhooks"* — POC trigger only; entrypoint identical (D-004).
+2. *"Polling, not webhooks"* — both adapters now exist. `assistant serve` is HMAC-SHA256 verified, delivery-ID deduped (in-memory for the POC; persistent store is a production follow-up), and calls the same `RunDependencyPR` / `RunIssueTriage` entrypoint as `run --pr` / `run --issue`. No new privilege, no policy bypass.
 3. *"Stub LLM in tests"* — determinism for CI; real-model runs are the eval/demo path, both recorded.
 
 **Over-engineered for a POC?** Hash-chained audit (dropped to nice-to-have), OPA (rejected), multi-agent (rejected), W5 repro harness (deferred with design done). **Genuinely necessary:** policy golden tests, SHA-bound decisions, credential-free sandbox, audit write-ahead — these are the thesis. **Demo-only:** rendered rule trace in comments (doubles as UX), `docker stats` on camera, staged Dependabot-shaped PR if no live one is open.

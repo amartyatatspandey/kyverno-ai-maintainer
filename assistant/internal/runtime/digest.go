@@ -96,7 +96,7 @@ func (r *Runner) RunMaintainerDigest() error {
 	runID := audit.NewRunID("digest" + week)
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "maintainer_digest", "entity": target,
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {

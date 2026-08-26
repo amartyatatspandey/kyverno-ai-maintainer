@@ -30,6 +30,7 @@ type Options struct {
 	DryRun     bool
 	UseSandbox bool
 	MaxLLMCall int
+	Trigger    string // "manual" | "webhook"; empty → "manual"
 }
 
 type Runner struct {
@@ -66,6 +67,13 @@ func New(o Options) (*Runner, error) {
 	}, nil
 }
 
+func (r *Runner) trigger() string {
+	if r.opts.Trigger != "" {
+		return r.opts.Trigger
+	}
+	return "manual"
+}
+
 type runState struct {
 	log      *audit.Log
 	llmCalls int
@@ -79,7 +87,7 @@ func (r *Runner) RunDependencyPR(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "dependency_prs", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -205,7 +213,7 @@ func (r *Runner) RunIssueTriage(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("issue%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "issue_triage", "entity": fmt.Sprintf("issue/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -278,7 +286,7 @@ func (r *Runner) RunDCOCheck(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "dco_check", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -331,7 +339,7 @@ func (r *Runner) RunWelcomeBot(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "welcome_bot", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -381,7 +389,7 @@ func (r *Runner) RunReviewerSuggest(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "reviewer_suggest", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -437,7 +445,7 @@ func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "policy_lint", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -528,7 +536,7 @@ func (r *Runner) RunDocsGapCheck(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "docs_gap_detection", "entity": fmt.Sprintf("pr/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -592,7 +600,7 @@ func (r *Runner) RunFlakyDetection() error {
 	runID := audit.NewRunID("flaky")
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "flaky_detection", "entity": "flaky-report",
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -650,7 +658,7 @@ func (r *Runner) RunDiscussionQA(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("disc%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "discussion_qa", "entity": fmt.Sprintf("discussion/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {
@@ -804,7 +812,7 @@ func (r *Runner) RunIssueRepro(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("issue%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
 		"workflow": "issue_repro", "entity": fmt.Sprintf("issue/%d", number),
-		"repo": r.opts.Repo, "trigger": "manual", "model": r.model.Name(),
+		"repo": r.opts.Repo, "trigger": r.trigger(), "model": r.model.Name(),
 		"config_path": r.opts.ConfigPath, "dry_run": r.opts.DryRun,
 	})
 	if err != nil {

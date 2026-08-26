@@ -11,6 +11,7 @@
 //	assistant digest            # weekly repo dashboard (cron: 0 9 * * 1)
 //	assistant flaky-report      # comment flaky suite candidates (never auto-quarantines)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
+//	assistant serve             # GitHub webhook adapter (AI_WEBHOOK_SECRET)
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
 //	assistant stop              # kill running sandboxes
@@ -20,12 +21,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/audit"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/runtime"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/webhook"
 )
 
 func main() {
@@ -35,6 +39,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		cmdRun(os.Args[2:])
+	case "serve":
+		cmdServe(os.Args[2:])
 	case "digest":
 		cmdDigest(os.Args[2:])
 	case "flaky-report":
@@ -114,6 +120,53 @@ func cmdRun(args []string) {
 	if len(ids) > 0 {
 		evs, _ := audit.ReadEvents(*auditDir, ids[len(ids)-1])
 		fmt.Println(audit.Render(evs))
+	}
+}
+
+func cmdServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	port := fs.Int("port", 8080, "listen port")
+	path := fs.String("path", "/webhook", "webhook path")
+	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
+	cfg := fs.String("config", "config/ai-maintainer.yaml", "policy config")
+	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
+	auditDir := fs.String("audit-dir", "audit", "audit directory")
+	repoDir := fs.String("repo-dir", "", "local checkout (enables import closure + sandbox)")
+	dry := fs.Bool("dry-run", true, "do not execute mutating GitHub calls")
+	sbx := fs.Bool("sandbox", false, "run scoped tests / repro in docker sandbox")
+	fs.Parse(args)
+
+	secret := os.Getenv("AI_WEBHOOK_SECRET")
+	if secret == "" {
+		fatal(fmt.Errorf("AI_WEBHOOK_SECRET is required for assistant serve (never pass the secret as a flag)"))
+	}
+
+	r, err := runtime.New(runtime.Options{
+		Repo: *repo, ConfigPath: *cfg, MapPath: *tmap, AuditDir: *auditDir,
+		RepoDir: *repoDir, DryRun: *dry, UseSandbox: *sbx,
+		Trigger: "webhook",
+	})
+	if err != nil {
+		fatal(err)
+	}
+
+	h := webhook.New(webhook.Options{
+		Secret: secret,
+		// Same entrypoint as `assistant run --pr N` / `run --issue N`.
+		RunPR:    r.RunDependencyPR,
+		RunIssue: r.RunIssueTriage,
+	})
+	mux := http.NewServeMux()
+	mux.Handle(*path, h)
+	addr := fmt.Sprintf(":%d", *port)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	fmt.Fprintf(os.Stderr, "webhook listening on %s%s (secret from AI_WEBHOOK_SECRET)\n", addr, *path)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		fatal(err)
 	}
 }
 
@@ -265,10 +318,12 @@ func usage() {
   assistant digest [--repo owner/name] [--dry-run=false]   # weekly dashboard; cron: 0 9 * * 1 assistant digest
   assistant flaky-report [--repo owner/name] [--dry-run=false]  # flag flaky suites; never auto-quarantines
   assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]
+  assistant serve [--port 8080] [--path /webhook] [--repo owner/name] [--dry-run=false]
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop
 
 Model provider: AI_PROVIDER=anthropic|openai|stub (default stub), AI_MODEL=...
+Webhook secret: AI_WEBHOOK_SECRET (required for serve; never a CLI flag)
 `)
 	os.Exit(2)
 }
