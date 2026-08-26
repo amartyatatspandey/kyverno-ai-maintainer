@@ -73,6 +73,11 @@ func TestMergeGoldenCases(t *testing.T) {
 		{"closed_pr_denied", func(pr *PRFacts, c *Context) { pr.State = "CLOSED" }, false, "mergeable"},
 		{"merge_budget_exhausted", func(pr *PRFacts, c *Context) { c.Counters.MergesToday = 10 }, false, "merge_budget"},
 		{"kill_switch_denies", func(pr *PRFacts, c *Context) { c.KillSwitch = true }, false, "kill_switch_off"},
+		// R3 / Finding 2: #16768 (cel-go bump) vs concurrent human PR #16782.
+		{"competing_pr_16768_16782", func(pr *PRFacts, c *Context) {
+			pr.Number = 16768
+			pr.CompetingPRs = []int{16782}
+		}, false, "no_competing_pr"},
 	}
 
 	for _, tc := range cases {

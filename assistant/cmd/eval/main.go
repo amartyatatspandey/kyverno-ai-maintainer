@@ -31,6 +31,9 @@ type depCase struct {
 	// neither is a valid "expected DENY". Only human_rejection is.
 	ClosureCause string `json:"closure_cause"`
 	ClosedBy     string `json:"closed_by"`
+	// CompetingPRs is the structured no_competing_pr fact (other open PR
+	// numbers whose files overlap). Empty for cases with no concurrent work.
+	CompetingPRs []int `json:"competing_prs,omitempty"`
 }
 
 type w3Case struct {
@@ -60,6 +63,7 @@ func main() {
 		allowed, denied          int
 		falsePositive            []int // policy ALLOW on a PR a HUMAN rejected
 		rateLimited              []int // ALLOW on a PR the rate-limiter bot closed
+		duplicateWork            []int // ALLOW despite a competing open PR
 		typeCounts               = map[string]int{}
 		denyReasons              = map[string]int{}
 		closedCases, mergedCases int
@@ -76,11 +80,15 @@ func main() {
 			Title: c.Title, BaseRef: c.Base, HeadSHA: fmt.Sprintf("sha%d", c.Number),
 			Labels: c.Labels, ChangedFiles: c.Files, UpdateType: ut,
 			ChecksGreen: true, Mergeable: true, State: "OPEN",
+			CompetingPRs: c.CompetingPRs,
 		}
 		d := e.Evaluate(policy.Action{Type: "merge_pr"},
 			policy.Context{Workflow: "dependency_prs", PR: pr, Now: time.Now()})
 		if d.Allowed {
 			allowed++
+			if len(c.CompetingPRs) > 0 {
+				duplicateWork = append(duplicateWork, c.Number)
+			}
 		} else {
 			denied++
 			denyReasons[firstFailedRule(d)]++
@@ -109,6 +117,8 @@ func main() {
 	fmt.Printf("policy ALLOW: %d   DENY: %d\n", allowed, denied)
 	fmt.Printf("FALSE-POSITIVE MERGES (ALLOW on human-rejected PR): %d %v  [target: 0]\n",
 		len(falsePositive), falsePositive)
+	fmt.Printf("DUPLICATE-WORK MERGES (ALLOW with competing open PR): %d %v  [target: 0]\n",
+		len(duplicateWork), duplicateWork)
 	fmt.Printf("ALLOW on rate-limiter-closed PRs: %d %v\n", len(rateLimited), rateLimited)
 	fmt.Printf("  ^ not errors: these were mergeable bumps discarded because the\n" +
 		"    Dependabot queue exceeded 8 open PRs — i.e. exactly the backlog this\n" +

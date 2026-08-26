@@ -44,6 +44,11 @@ type PRFacts struct {
 	State             string
 	AuthorAssociation string // FIRST_TIME_CONTRIBUTOR | FIRST_TIMER | CONTRIBUTOR | MEMBER | OWNER
 	CreatedAt         time.Time
+	// CompetingPRs is other currently-open PR numbers whose changed files
+	// overlap this PR's. Populated by the caller (runtime / eval harness),
+	// never by Evaluate. Integers only — no titles or bodies (untrusted text
+	// cannot reach policy inputs). Empty means none found.
+	CompetingPRs []int
 }
 
 // IssueFacts for triage actions.

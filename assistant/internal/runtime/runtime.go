@@ -155,6 +155,7 @@ func (r *Runner) RunDependencyPR(ctx context.Context, number int) error {
 		pr = fresh
 	}
 	pctx.Now = time.Now()
+	r.attachCompetingPRs(st, pctx.PR)
 	mergeDecision := r.engine.Evaluate(policy.Action{Type: "merge_pr", Target: fmt.Sprintf("pr/%d", number)}, pctx)
 	r.logDecision(st, "merge_pr", mergeDecision)
 
@@ -987,4 +988,21 @@ func truncate(s string, n int) string {
 		return s[:n] + "…[truncated]"
 	}
 	return s
+}
+
+// attachCompetingPRs fills PRFacts.CompetingPRs from currently-open PRs.
+// Fetch failure leaves the list empty (fail-open on this duplicate-work
+// check — it is not a safety gate). The engine itself never calls GitHub.
+func (r *Runner) attachCompetingPRs(st *runState, pr *policy.PRFacts) {
+	if pr == nil || !r.cfg.AutoMerge.NoCompetingPR {
+		return
+	}
+	st.log.Emit("tool_called", map[string]any{"tool": "github.list_open_prs", "read_only": true})
+	open, err := r.gh.ListOpenPRs()
+	if err != nil {
+		st.log.Emit("tool_error", map[string]any{"tool": "github.list_open_prs", "error": err.Error()})
+		return
+	}
+	pr.CompetingPRs = competingPRNumbers(pr, open)
+	st.log.Emit("competing_prs", map[string]any{"numbers": pr.CompetingPRs})
 }

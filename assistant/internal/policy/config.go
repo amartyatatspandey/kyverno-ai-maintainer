@@ -37,6 +37,7 @@ type Config struct {
 		ChangedFilesMustMatch []string `yaml:"changed_files_must_match"`
 		DenyLabels            []string `yaml:"deny_labels"`
 		MinAgeHours           int      `yaml:"min_age_hours"`
+		NoCompetingPR         bool     `yaml:"no_competing_pr"`
 		Method                string   `yaml:"method"`
 	} `yaml:"auto_merge"`
 	GitHubOps map[string][]string `yaml:"github_ops"`

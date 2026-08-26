@@ -55,6 +55,9 @@ auto_merge:
     - ".github/workflows/*.yml"
   deny_labels: ["hold", "ai-hold", "security", "breaking-change", "do-not-merge"]
   min_age_hours: 0
+  # Deny merge_pr when another open PR's files overlap this one (R3 / #16768).
+  # Caller populates PRFacts.CompetingPRs; the engine only inspects the ints.
+  no_competing_pr: true
   method: squash
 
 github_ops:

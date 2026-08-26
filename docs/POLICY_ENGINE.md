@@ -17,7 +17,7 @@ type Action struct {
 
 type Context struct { // assembled FRESH by the engine itself (fetch-fresh rule, RISKS P4)
     Repo         string
-    PR           *PRFacts   // author, authorType, base, headSHA, labels, checks, changedFiles, updateType
+    PR           *PRFacts   // author, authorType, base, headSHA, labels, checks, changedFiles, updateType, competingPRs
     Issue        *IssueFacts
     RunID        string
     Counters     Counters   // today's merges/comments/labels per entity + global
@@ -104,6 +104,7 @@ auto_merge:
                                           # are flagged, not auto-merged. Deliberate.
   deny_labels: ["hold", "ai-hold", "security", "breaking-change", "do-not-merge"]
   min_age_hours: 0                        # optional supply-chain cooldown; 0 for demo, recommend 24 upstream
+  no_competing_pr: true                   # deny merge_pr when another open PR's files overlap (R3 / #16768)
   method: squash
 
 # ---- allowed GitHub operations per workflow (allowlist) ----
@@ -140,7 +141,7 @@ sandbox:
 3. Action type ∈ `github_ops[workflow]` (or command id ∈ `commands` for sandbox)
 4. Branch rules (merge target allowlist)
 5. **Protected paths** — overrides everything below it (so a workflow-pin bump is *flag for human*, never auto-merge, even though `changed_files_must_match` would admit it)
-6. Action-specific conditions (auto-merge block; label allow/deny lists; comment template exists)
+6. Action-specific conditions (auto-merge block including `no_competing_pr`; label allow/deny lists; comment template exists)
 7. Security-sensitive detection: changed files ∩ protected_paths, or Dependabot group ∈ {sigstore} ⇒ attach `security-review` escalation regardless of other outcomes
 8. Rate limits (per-entity, then global)
 9. Freshness: context age < TTL, head SHA unchanged ⇒ bind Decision to SHA

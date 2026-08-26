@@ -322,11 +322,26 @@ func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ct
 		return false
 	}
 	add("no_deny_labels", true, "labels ∩ deny = ∅")
+	if am.NoCompetingPR {
+		if len(pr.CompetingPRs) > 0 {
+			add("no_competing_pr", false, "overlapping open PR(s): "+formatPRNums(pr.CompetingPRs))
+			return false
+		}
+		add("no_competing_pr", true, "no overlapping open PRs")
+	}
 	if !add("merge_budget", ctx.Counters.MergesToday < e.cfg.RateLimits.MergesPerDay,
 		fmt.Sprintf("%d/%d today", ctx.Counters.MergesToday, e.cfg.RateLimits.MergesPerDay)) {
 		return false
 	}
 	return true
+}
+
+func formatPRNums(nums []int) string {
+	parts := make([]string, len(nums))
+	for i, n := range nums {
+		parts[i] = fmt.Sprintf("#%d", n)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (e *Engine) labelRules(d *Decision, add func(string, bool, string) bool, a Action, ctx Context) bool {

@@ -537,7 +537,8 @@
   "state": "CLOSED",
   "title": "chore(deps): bump github.com/google/cel-go from 0.29.2 to 0.30.0",
   "closed_by": "realshuting",
-  "closure_cause": "human_rejection"
+  "closure_cause": "human_rejection",
+  "competing_prs": [16782]
  },
  {
   "base": "main",
