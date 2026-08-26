@@ -9,9 +9,9 @@
 - Maintainer hands-on time per dep PR: **estimated** 2–10 min (open, scan diff/CI, merge) — not directly measurable from history; at 5 min avg ≈ **1.4 h/mo direct**, plus batching/context-switch overhead. (ASSUMPTIONS #3 — mentors to confirm.)
 
 ### CI cost (scoped-testing target)
-- One full successful conformance run on upstream: **342 jobs, ≈3,068 job-minutes (~51 CPU-hours) of runners** (run 23287428030; jobs API summed). Wall time ~10 min thanks to massive parallelism — the cost is compute, not latency.
+- One full successful conformance run on upstream: **342 jobs, ≈3,068 job-minutes (~51 CPU-hours) of runners** (run 23287428030; jobs API summed). Wall time ~10 min thanks to massive parallelism — the cost is compute, not latency. Re-verified 2026-08-26: job count is still **~333** (same order of magnitude); only the *timing* of when this suite runs was wrong.
 - Unit tests: single job, ~10 min (NOTES.md §3).
-- This runs on PR events to main/release branches; a go.mod patch bump pays the same ~3,068 job-minutes as an engine rewrite.
+- This suite does **not** run on pull-request events. It runs post-merge (`push` to `main`/`release-*`) or on-demand via a `/conformance` PR comment — confirmed by inspecting `.github/workflows/check-tests.yaml` and `tests-conformance.yaml` in `kyverno/kyverno`, and by checking a live dependency-bump PR's checks (kyverno/kyverno#17360, 2026-08-26: zero conformance jobs; only unit tests, five lightweight "Framework tests" jobs, and lint/codegen). **Dependency PRs currently get zero conformance signal before merge at all.** A bad bump is only caught by the full suite after it's already on `main`. Scoped test selection in a sandbox (this project's W3 workflow) isn't reducing an existing per-PR cost — it's adding a pre-merge safety net that doesn't exist today.
 - **Plausible scoped-run estimate** (to be *measured* in Phase 11, not asserted): dependency bumps and single-area code PRs plausibly map to ≤10 of 52 suites → **~70–85% job-minute reduction** for the majority class of PRs. Lockfile-only bumps arguably need even less (unit + smoke suite).
 
 ### Issue triage (secondary flow target)
@@ -37,7 +37,7 @@
 | Metric | Definition | Target |
 |---|---|---|
 | Selection recall | historical PRs with a conformance failure: did selection include ≥1 actually-failing suite? | ≥ 90% measured; report per-area breakdown |
-| Compute reduction | job-minutes selected / 3,068 baseline, per eval PR class | ≥ 60% median (est. 70–85%; measure decides) |
+| Compute reduction | job-minutes selected / 3,068 post-merge full-suite baseline, per eval PR class | ≥ 60% median (est. 70–85%; measure decides) |
 | Full-suite fallback rate | runs where unmapped files forced full selection | measured (map-coverage health) |
 | Selection-size inflation | LLM-widened vs deterministic-only size | measured (detects A6) |
 
@@ -56,4 +56,4 @@
 | Injection resistance | Phase 14 suite: 0 policy-crossing actions from injected content (hard gate) |
 
 ## Claim discipline
-Numbers above marked *estimated* stay out of the video unless Phase 11 converts them to measurements; the demo cites: 21 dep-PRs/mo at 9.3 h median latency, 3,068 job-minutes per conformance run, 51% triage backlog, 67% zero-comment issues.
+Numbers above marked *estimated* stay out of the video unless Phase 11 converts them to measurements; the demo cites: 21 dep-PRs/mo at 9.3 h median latency, zero conformance jobs on a dependency PR before merge (the ~333-job / 3,068-job-minute suite runs post-merge or via `/conformance`), 51% triage backlog, 67% zero-comment issues.
