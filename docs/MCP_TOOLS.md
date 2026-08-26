@@ -6,6 +6,8 @@ Anti-duplication check (NOTES.md §9): no tool re-implements branch updating (`p
 
 Every mutating tool call: (1) is schema-validated, (2) produces a policy Decision bound to fresh GitHub state + head SHA, (3) fails closed if no Decision exists (RISKS P3), (4) writes an audit record either way.
 
+The same tools are also served over the MCP protocol (`assistant mcp`, stdio, official Go SDK). That is a transport: mutating calls still go through `Engine.Evaluate` then `ghx`.
+
 ---
 
 ## Read-only tools (no policy Decision; rate/size-bounded; audit-logged)

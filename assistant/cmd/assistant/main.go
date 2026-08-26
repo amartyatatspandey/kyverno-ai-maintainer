@@ -12,6 +12,7 @@
 //	assistant flaky-report      # comment flaky suite candidates (never auto-quarantines)
 //	assistant draft-release-notes --since v1.16.0 [--out CHANGELOG.draft.md]
 //	assistant serve             # GitHub webhook adapter (AI_WEBHOOK_SECRET)
+//	assistant mcp               # MCP stdio server (same policy/audit as run)
 //	assistant audit show <id>   # human-readable decision trace
 //	assistant audit why <entity>
 //	assistant stop              # kill running sandboxes
@@ -27,6 +28,10 @@ import (
 	"time"
 
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/audit"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/ghx"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/intel"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/mcpserver"
+	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/policy"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/runtime"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/webhook"
@@ -41,6 +46,8 @@ func main() {
 		cmdRun(os.Args[2:])
 	case "serve":
 		cmdServe(os.Args[2:])
+	case "mcp":
+		cmdMCP(os.Args[2:])
 	case "digest":
 		cmdDigest(os.Args[2:])
 	case "flaky-report":
@@ -166,6 +173,39 @@ func cmdServe(args []string) {
 	}
 	fmt.Fprintf(os.Stderr, "webhook listening on %s%s (secret from AI_WEBHOOK_SECRET)\n", addr, *path)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		fatal(err)
+	}
+}
+
+func cmdMCP(args []string) {
+	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
+	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
+	cfgPath := fs.String("config", "config/ai-maintainer.yaml", "policy config")
+	tmap := fs.String("map", "config/test-map.yaml", "path→suite map")
+	auditDir := fs.String("audit-dir", "audit", "audit directory")
+	repoDir := fs.String("repo-dir", "", "local checkout (enables import closure)")
+	dry := fs.Bool("dry-run", true, "do not execute mutating GitHub calls")
+	fs.Parse(args)
+
+	cfg, err := policy.LoadConfig(*cfgPath)
+	if err != nil {
+		fatal(err)
+	}
+	tm, err := intel.LoadMap(*tmap)
+	if err != nil {
+		fatal(err)
+	}
+	h := &mcpserver.Host{
+		Engine:   policy.NewEngine(cfg),
+		GH:       &ghx.Client{Repo: *repo, DryRun: *dry, Dir: *repoDir},
+		Map:      tm,
+		Cfg:      cfg,
+		Repo:     *repo,
+		RepoDir:  *repoDir,
+		AuditDir: *auditDir,
+		Classify: runtime.ClassifyUpdateType,
+	}
+	if err := mcpserver.Run(context.Background(), h); err != nil {
 		fatal(err)
 	}
 }
@@ -319,6 +359,7 @@ func usage() {
   assistant flaky-report [--repo owner/name] [--dry-run=false]  # flag flaky suites; never auto-quarantines
   assistant draft-release-notes --since <tag-or-YYYY-MM-DD> [--out file] [--repo-dir path]
   assistant serve [--port 8080] [--path /webhook] [--repo owner/name] [--dry-run=false]
+  assistant mcp [--repo owner/name] [--dry-run=false]  # MCP stdio; mutating tools still hit Evaluate
   assistant audit list | show [run_id] | why <pr17067>
   assistant stop
 

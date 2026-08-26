@@ -93,7 +93,7 @@ Design, eval, and discovery docs live in [`docs/`](docs/).
 ```
 assistant/
   cmd/assistant/     CLI: run --pr N | --issue N [--repro] | --discussion N, digest, flaky-report,
-                     draft-release-notes, serve (webhook), audit show|why|list, stop
+                     draft-release-notes, serve (webhook), mcp (stdio), audit show|why|list, stop
   cmd/eval/          replays historical cases, prints the metrics
   internal/policy/   deterministic authorization (deny-by-default) + golden tests, 13 workflows
   internal/intel/    path→suite map, reverse import closure, CODEOWNERS/git-log reviewer suggest,
@@ -105,10 +105,11 @@ assistant/
   internal/llm/      BYOM provider abstraction (advisory outputs only; incl. dual-gated Q&A grounding)
   internal/runtime/  the run loop + comment templates + injection tests
   internal/webhook/  GitHub webhook adapter (HMAC-SHA256, delivery-ID dedupe) → same run entrypoint
+  internal/mcpserver/ MCP protocol server (stdio); mutating tools still hit Engine.Evaluate
   config/            ai-maintainer.yaml (policy), test-map.yaml (repo intelligence)
 eval/                50 Dependabot PRs, 30 code PRs, 30 issues — real history
 ```
 
 ## Status
 
-POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection is advisory-only until selection recall is measured. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Webhook ingestion ships as `assistant serve` (HMAC-verified adapter on the same run entrypoint as CLI/poll). Not built: MCP-over-protocol serving (in-process Go interfaces for now).
+POC. Not deployed against upstream kyverno/kyverno; designed to run against a fork with a least-privilege GitHub App. Scoped test selection is advisory-only until selection recall is measured. Automated issue reproduction (W5) moved from designed-only to built and tested this pass — see [SECURITY_ADVISORY_TRIAGE.md](docs/SECURITY_ADVISORY_TRIAGE.md) / [AUTO_BACKPORT.md](docs/AUTO_BACKPORT.md) for the two that deliberately stayed design-only. Webhook ingestion ships as `assistant serve` (HMAC-verified adapter on the same run entrypoint as CLI/poll). MCP-over-protocol serving ships as `assistant mcp` (stdio; mutating tools still go through `Engine.Evaluate`).

@@ -30,7 +30,9 @@ new issue → classify (type + area labels from taxonomy) → detect missing rep
 Cheap to add (reuses runtime, policy, audit; two read-only tools + no sandbox) and demos untrusted-input handling on a *live* adversarial artifact for Phase 14.
 
 ### Explicitly OUT (roadmap slide, one line each)
-W5 repro harness (heaviest build; injection story covered by W4 + Phase 14 instead), webhooks/`assistant serve`, W2 stale-nudges, W6 Q&A, W8 docs drafts, Slack anything, OPA backend, VM-per-run isolation, multi-repo support.
+W2 stale-nudges, W8 docs drafts, Slack anything, OPA backend, VM-per-run isolation, multi-repo support.
+
+Webhook ingestion (`assistant serve`) and MCP-over-protocol serving (`assistant mcp`) shipped as adapters on the existing run/policy/audit path — they were on this list as infrastructure, not as new authority.
 
 ## Demo environment
 
@@ -45,7 +47,7 @@ W5 repro harness (heaviest build; injection story covered by W4 + Phase 14 inste
 |---|---|---|
 | 1 | `path→suite map` + import-closure selector (repo intelligence metadata) | 16 |
 | 2 | Agent runtime CLI (`poll`, `run --pr`, `run --issue`) with budgeted LLM loop, BYOM provider abstraction | 16 |
-| 3 | MCP server: 12-tool surface (13 minus repro) | 16 |
+| 3 | MCP server: tool surface over the MCP protocol (`assistant mcp`, stdio) | 16 (shipped) |
 | 4 | Policy engine + `ai-maintainer.yaml` + golden tests | 16 |
 | 5 | Sandbox executor (container-per-run, limits, reaper) | 16 |
 | 6 | Audit log (JSONL + human-readable render) | 12/16 |

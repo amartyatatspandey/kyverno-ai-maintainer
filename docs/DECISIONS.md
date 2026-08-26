@@ -9,6 +9,8 @@ Host-socket KinD rejected (siblings ≠ sandbox); K8s Jobs and VM-per-run are pr
 ## D-005 (Phase 7): Policy engine = deterministic Go package + `.github/ai-maintainer.yaml`, not OPA
 ~10 predicates over one context object don't justify a Rego runtime, a second language, and input marshalling — while the hard guarantees (fetch-fresh context, SHA-bound decisions, fail-closed tool wiring) live in Go regardless. `Evaluate(action, ctx) → Decision` is OPA-shaped so a RegoEngine is a drop-in if policy complexity grows. Full design in POLICY_ENGINE.md. Rejected: OPA/Rego now (premature), policy-in-system-prompt (thesis violation), hardcoded rules without YAML (maintainers couldn't tune without recompiling).
 
+**Dependency exception:** `github.com/modelcontextprotocol/go-sdk` was added for `assistant mcp`. An SDK that implements a real, evolving external protocol is a legitimate exception to "boring Go, one dep" in a way an agent-orchestration framework would not be. Mutating MCP calls still terminate in `Evaluate`.
+
 ## D-004 (Phase 5): Single-agent, event-per-run, deterministic-pipeline-with-LLM-steps
 
 **Decision.** One agent process. Each triggering event (Dependabot PR, target PR for scoped tests, new issue) starts one bounded, stateless **run**:

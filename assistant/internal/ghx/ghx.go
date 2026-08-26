@@ -698,6 +698,18 @@ func truncate(s string, n int) string {
 	return s
 }
 
+// GetDiff returns a size-capped unified diff for a PR (read-only; no Decision).
+func (c *Client) GetDiff(number int, maxBytes int) (string, error) {
+	if maxBytes <= 0 {
+		maxBytes = 32 << 10
+	}
+	out, err := run("pr", "diff", fmt.Sprint(number), "-R", c.Repo)
+	if err != nil {
+		return "", err
+	}
+	return truncate(string(out), maxBytes), nil
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a

@@ -11,7 +11,7 @@ flowchart LR
         WH[webhook adapter<br/>HMAC + delivery-ID dedupe]
         RT[runtime<br/>run loop, budgets]
         LLMP[llm providers<br/>anthropic / openai / stub — BYOM]
-        TOOLS[tool layer<br/>12 tools, schema-validated]
+        TOOLS[MCP server + in-process tools<br/>stdio protocol, policy-gated]
         INTEL[repo intel<br/>path→suite map, import closure]
         POL[policy engine<br/>Evaluate → Decision]
         EXEC[executor<br/>sole credential holder]
@@ -101,7 +101,7 @@ Per POC_SCOPE.md: primary dependency flow (all 7 pillars), triage-lite secondary
 4. LLM sees secrets? No — provider receives repo-public text only; BYOM/local-model support is the answer for orgs that won't ship even that.
 
 **What would an agent-infra engineer object to?**
-1. *"Your MCP layer is in-process Go interfaces, not an actual MCP server"* — correct and deliberate for the POC (D-004: fewer moving parts, same contract). The tool schema is MCP-shaped; serving it over the protocol is a thin adapter, on the roadmap, and required for the "any agent runtime" story to be literal rather than architectural.
+1. *"Your MCP layer is in-process Go interfaces, not an actual MCP server"* — addressed: `assistant mcp` serves the tool surface over the official MCP protocol (stdio, `github.com/modelcontextprotocol/go-sdk`). Mutating tools still call `policy.Engine.Evaluate` then the same `ghx` methods the CLI uses; the server is a new transport, not a new authority.
 2. *"Polling, not webhooks"* — both adapters now exist. `assistant serve` is HMAC-SHA256 verified, delivery-ID deduped (in-memory for the POC; persistent store is a production follow-up), and calls the same `RunDependencyPR` / `RunIssueTriage` entrypoint as `run --pr` / `run --issue`. No new privilege, no policy bypass.
 3. *"Stub LLM in tests"* — determinism for CI; real-model runs are the eval/demo path, both recorded.
 
