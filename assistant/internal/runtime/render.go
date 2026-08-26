@@ -9,6 +9,10 @@ import (
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
 )
 
+// GitHub comment templates. Untrusted strings (titles, LLM text, log tails)
+// pass through escapeParam (A2/I9) before interpolation — the model cannot
+// break out of the template into a second GitHub action.
+
 // escapeParam neutralizes markdown/HTML injection from untrusted text that
 // reaches a comment template (RISKS A2 / injection case I9).
 func escapeParam(s string, max int) string {
@@ -19,6 +23,9 @@ func escapeParam(s string, max int) string {
 	return s
 }
 
+// renderPRComment is the W1 maintainer-facing comment. The LLM summary is
+// labeled advisory; the policy table is the decision. mode != autonomous
+// holds an ALLOW so humans see eligibility without a merge.
 func renderPRComment(runID string, pr *policy.PRFacts, summary string, sel intel.Selection,
 	tests []sandbox.StageResult, d policy.Decision, mode string) string {
 	var b strings.Builder
@@ -81,6 +88,8 @@ func renderPRComment(runID string, pr *policy.PRFacts, summary string, sel intel
 	return b.String()
 }
 
+// renderTriageComment never claims the model applied a privileged label —
+// policy already stripped the denylist; the template just says so.
 func renderTriageComment(runID string, c classification, labelDecision policy.Decision) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -105,6 +114,9 @@ func renderTriageComment(runID string, c classification, labelDecision policy.De
 	return b.String()
 }
 
+// renderDCOGuidance is comment-only. Unsigned SHAs come from git trailers
+// (GetCommitFacts), never from the PR body, so a hostile description cannot
+// fake a Signed-off-by.
 func renderDCOGuidance(runID string, pr *policy.PRFacts, unsigned []string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -131,6 +143,8 @@ func renderDCOGuidance(runID string, pr *policy.PRFacts, unsigned []string) stri
 	return b.String()
 }
 
+// renderWelcome is a first-timer pointer, not a merge. Author login is
+// escaped so a crafted username cannot inject markdown (A2).
 func renderWelcome(runID string, pr *policy.PRFacts) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -150,6 +164,8 @@ func renderWelcome(runID string, pr *policy.PRFacts) string {
 	return b.String()
 }
 
+// renderReviewerSuggestion never files a GitHub review request — that
+// github_op is not in this workflow. The list is CODEOWNERS/git-log, not LLM.
 func renderReviewerSuggestion(runID string, pr *policy.PRFacts, reviewers []intel.Reviewer) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -169,6 +185,8 @@ func renderReviewerSuggestion(runID string, pr *policy.PRFacts, reviewers []inte
 	return b.String()
 }
 
+// renderPolicyLintResult posts sandbox observations. Log tails are escaped
+// and truncated so a policy YAML comment cannot break out of the template (I9).
 func renderPolicyLintResult(runID string, pr *policy.PRFacts, results []sandbox.LintResult) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -201,6 +219,8 @@ func renderPolicyLintResult(runID string, pr *policy.PRFacts, results []sandbox.
 	return b.String()
 }
 
+// renderDocsGap flags a missing website-repo pointer. reason is a structured
+// area/path hit from DetectDocsGap, not model prose.
 func renderDocsGap(runID string, pr *policy.PRFacts, reason string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -219,6 +239,8 @@ func renderDocsGap(runID string, pr *policy.PRFacts, reason string) string {
 	return b.String()
 }
 
+// renderDiscussionAnswer posts a grounded draft. The answer is still escaped:
+// a discussion body that jailbreaks the model (I4) must not inject markdown.
 func renderDiscussionAnswer(runID, answer string, snips []intel.DocSnippet) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -240,6 +262,8 @@ func renderDiscussionAnswer(runID, answer string, snips []intel.DocSnippet) stri
 	return b.String()
 }
 
+// renderDiscussionEscalation is the dual-gate miss path: no local snippet
+// overlap or low model confidence → human, never a guessed answer.
 func renderDiscussionEscalation(runID string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -252,6 +276,8 @@ func renderDiscussionEscalation(runID string) string {
 	return b.String()
 }
 
+// renderFlakyReport includes a YAML snippet a human can paste. The assistant
+// never writes quarantined-tests itself (T2).
 func renderFlakyReport(runID string, cands []intel.FlakyCandidate) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -289,6 +315,8 @@ func shortSHAs(shas []string) []string {
 	return out
 }
 
+// renderDigest is numbers-only. No LLM insertion point, so an issue body on
+// the digest ticket cannot inject a second action into this comment.
 func renderDigest(runID string, snap digestSnapshot) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -337,6 +365,8 @@ func short(sha string) string {
 	return sha
 }
 
+// renderReproRejected does not echo the rejected YAML (A2: hostile comments
+// in the manifest must not round-trip into a GitHub comment).
 func renderReproRejected(runID, reason string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
@@ -354,6 +384,8 @@ func renderReproRejected(runID, reason string) string {
 	return b.String()
 }
 
+// renderReproResult is advisory evidence, not a "bug confirmed" verdict —
+// env quirks (T4) are why the comment names the pinned versions.
 func renderReproResult(runID, version, expected string, res *sandbox.ReproResult) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }

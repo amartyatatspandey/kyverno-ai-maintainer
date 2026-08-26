@@ -21,6 +21,9 @@ import (
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/sandbox"
 )
 
+// Options is how CLI / webhook / MCP construct a Runner. Trigger is audit
+// metadata only ("manual" vs "webhook") — it never changes which policy
+// path a mutating action takes.
 type Options struct {
 	Repo       string
 	ConfigPath string
@@ -33,6 +36,8 @@ type Options struct {
 	Trigger    string // "manual" | "webhook"; empty → "manual"
 }
 
+// Runner is one assistant process: shared engine, GitHub client, and sandbox
+// across sequential runs (D-004: one run at a time, no shared mutable plan).
 type Runner struct {
 	opts      Options
 	cfg       *policy.Config
@@ -44,6 +49,8 @@ type Runner struct {
 	reproExec func(*repro.ReproBundle) (*sandbox.ReproResult, error) // test hook; panics in injection tests
 }
 
+// New loads config+map or returns an error that the CLI treats as a global
+// halt (invariant 2: unreadable policy config must not start a run).
 func New(o Options) (*Runner, error) {
 	cfg, err := policy.LoadConfig(o.ConfigPath)
 	if err != nil {
@@ -67,6 +74,8 @@ func New(o Options) (*Runner, error) {
 	}, nil
 }
 
+// trigger is audit metadata only. Webhook vs CLI must not pick a different
+// policy path — both still Evaluate then ghx.
 func (r *Runner) trigger() string {
 	if r.opts.Trigger != "" {
 		return r.opts.Trigger
@@ -74,6 +83,7 @@ func (r *Runner) trigger() string {
 	return "manual"
 }
 
+// runState is per-run counters. D-004: no shared mutable plan across events.
 type runState struct {
 	log      *audit.Log
 	llmCalls int
@@ -82,7 +92,9 @@ type runState struct {
 	counters policy.Counters
 }
 
-// RunDependencyPR is the primary flow (POC_SCOPE.md).
+// RunDependencyPR is the primary flow (POC_SCOPE.md W1∘W3): classify, advisory
+// summary, scoped tests, then Evaluate(merge_pr) on a freshly fetched PR.
+// Webhook and CLI both call this — a new trigger is not a new authority.
 func (r *Runner) RunDependencyPR(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -208,7 +220,9 @@ func (r *Runner) RunDependencyPR(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunIssueTriage is the secondary flow.
+// RunIssueTriage is W4-lite: the model proposes area labels; policy filters
+// them against the allowlist; merge_pr is not in this workflow's github_ops
+// so it is structurally unreachable (injection I5).
 func (r *Runner) RunIssueTriage(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("issue%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -263,6 +277,8 @@ func (r *Runner) RunIssueTriage(ctx context.Context, number int) error {
 	return nil
 }
 
+// unsignedSHAs is derived from git trailers (CommitFacts), never PR body
+// text — a hostile description cannot fake DCO.
 func unsignedSHAs(c *policy.CommitFacts) []string {
 	if c == nil {
 		return nil
@@ -276,12 +292,13 @@ func unsignedSHAs(c *policy.CommitFacts) []string {
 	return out
 }
 
+// isFirstTimeContributor uses GitHub's AuthorAssociation enum, not a
+// heuristic over the PR body (welcome_bot must not fire on title keywords).
 func isFirstTimeContributor(assoc string) bool {
 	return assoc == "FIRST_TIME_CONTRIBUTOR" || assoc == "FIRST_TIMER"
 }
 
-// RunDCOCheck comments DCO guidance on PRs with unsigned commits. No-op when
-// every commit already has a matching Signed-off-by trailer.
+// RunDCOCheck comments unsigned commits. Comment-only: never merge.
 func (r *Runner) RunDCOCheck(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -333,8 +350,8 @@ func (r *Runner) RunDCOCheck(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunWelcomeBot comments a contributor-guide pointer for first-time authors.
-// No-op for MEMBER/CONTRIBUTOR/OWNER (and anyone else who is not first-time).
+// RunWelcomeBot greets first-time contributors. Comment-only. Association
+// comes from the GitHub API enum, not title/body heuristics.
 func (r *Runner) RunWelcomeBot(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -383,8 +400,8 @@ func (r *Runner) RunWelcomeBot(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunReviewerSuggest comments a suggested reviewer list from CODEOWNERS and
-// git history. It never requests reviews. No-op when the suggestion list is empty.
+// RunReviewerSuggest comments CODEOWNERS/git-log names. It never files a
+// GitHub review request — that would be a second write path around policy.
 func (r *Runner) RunReviewerSuggest(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -438,9 +455,9 @@ func (r *Runner) RunReviewerSuggest(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunPolicyLint lints changed policy-library YAML via the existing sandbox
-// (kyverno apply / kyverno test). PRs that do not touch the library are a
-// structural no-op — this rule never evaluates on those paths.
+// RunPolicyLint runs kyverno apply/test in the sandbox on policy-library YAML.
+// Empty PolicyLibraryFiles means the workflow is a no-op, not a lint of the
+// whole tree (would turn every PR into a cluster of kyverno-cli runs).
 func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -529,9 +546,9 @@ func (r *Runner) RunPolicyLint(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunDocsGapCheck comments when a user-facing change has no structural
-// website-repo docs pointer. The PR body is UNTRUSTED and is only scanned
-// for github.com/kyverno/website / `docs: #N` — never for prose.
+// RunDocsGapCheck flags user-facing diffs that lack a website-repo pointer.
+// The PR body may only *suppress* the flag (structural docs: #N / website URL);
+// prose cannot raise it (A2).
 func (r *Runner) RunDocsGapCheck(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("pr%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -579,8 +596,8 @@ func (r *Runner) RunDocsGapCheck(ctx context.Context, number int) error {
 	return nil
 }
 
-// RunFlakyDetection comments candidate flaky chainsaw suites on the digest
-// issue. Advisory only: it never edits quarantine/skip-lists.
+// RunFlakyDetection comments candidate flakes. It never edits quarantined-tests
+// or workflow inputs (T2: auto-quarantine is a human paste).
 func (r *Runner) RunFlakyDetection() error {
 	issueNum := r.cfg.MaintainerDigest.DigestIssueNumber
 	if issueNum <= 0 {
@@ -651,9 +668,9 @@ func (r *Runner) RunFlakyDetection() error {
 	return nil
 }
 
-// RunDiscussionQA answers a GitHub Discussion from local docs, or escalates.
-// The discussion body is UNTRUSTED: retrieval uses it only as a keyword query;
-// the LLM sees it only inside <untrusted_question> plus retrieved snippets.
+// RunDiscussionQA answers from the local docs index, dual-gated on model
+// confidence *and* retrieval score. Either gate failing escalates rather
+// than guessing (wrong-but-confident answers are worse than silence).
 func (r *Runner) RunDiscussionQA(ctx context.Context, number int) error {
 	runID := audit.NewRunID(fmt.Sprintf("disc%d", number))
 	log, err := audit.Start(r.opts.AuditDir, runID, map[string]any{
@@ -747,6 +764,9 @@ func (r *Runner) RunDiscussionQA(ctx context.Context, number int) error {
 
 // ---- LLM insertion points (advisory only) ----
 
+// advisorySummary is LLM insertion point 1. The body is wrapped as quoted
+// data (I4). The returned string is rendered into a comment and never copied
+// into policy.Context.
 func (r *Runner) advisorySummary(st *runState, pr *policy.PRFacts, body string) string {
 	if st.llmCalls >= r.opts.MaxLLMCall {
 		st.log.Emit("budget_exceeded", map[string]any{"counter": "llm_calls", "cap": r.opts.MaxLLMCall})
@@ -769,6 +789,8 @@ func (r *Runner) advisorySummary(st *runState, pr *policy.PRFacts, body string) 
 	return strings.TrimSpace(res.Text)
 }
 
+// classification is the model's proposal only. Type is sanitized to a
+// closed set before Evaluate(set_labels); Rationale never reaches policy.
 type classification struct {
 	Type        string   `json:"type"`
 	AreaLabels  []string `json:"area_labels"`
@@ -776,6 +798,8 @@ type classification struct {
 	Rationale   string   `json:"rationale"`
 }
 
+// classifyIssue is LLM insertion point 2 (W4). Labels it returns are
+// proposals; Evaluate(set_labels) is the filter.
 func (r *Runner) classifyIssue(st *runState, iss *ghx.IssueView) classification {
 	system := "You classify a GitHub issue for the Kyverno project. Respond ONLY with JSON: " +
 		`{"type":"bug|enhancement|question","area_labels":[],"missing_info":[],"rationale":""}. ` +
@@ -801,8 +825,8 @@ func (r *Runner) classifyIssue(st *runState, iss *ghx.IssueView) classification 
 	return c
 }
 
-// RunIssueRepro is W5: extract untrusted issue YAML, validate on a strict
-// allowlist, and only then run a scripted KinD/CLI observation.
+// RunIssueRepro is W5: extract YAML, ValidateReproBundle (hard gate), then
+// Evaluate(run_repro) before the sandbox. Invalid YAML never reaches Docker.
 func (r *Runner) RunIssueRepro(ctx context.Context, number int) error {
 	select {
 	case <-ctx.Done():
@@ -915,6 +939,8 @@ func (r *Runner) RunIssueRepro(ctx context.Context, number int) error {
 	return nil
 }
 
+// commentIssueRepro still Evaluate(comment) — a repro DENY does not imply
+// a comment ALLOW, and vice versa.
 func (r *Runner) commentIssueRepro(st *runState, pctx policy.Context, number int, runID, body string) {
 	cd := r.engine.Evaluate(policy.Action{Type: "comment", Target: fmt.Sprintf("issue/%d", number)}, pctx)
 	r.logDecision(st, "comment", cd)
@@ -926,6 +952,7 @@ func (r *Runner) commentIssueRepro(st *runState, pctx policy.Context, number int
 
 // ---- helpers ----
 
+// logDecision records the full rule trace write-ahead of any GitHub call.
 func (r *Runner) logDecision(st *runState, action string, d policy.Decision) {
 	rules := make([]map[string]any, 0, len(d.Rules))
 	for _, ru := range d.Rules {
@@ -937,6 +964,7 @@ func (r *Runner) logDecision(st *runState, action string, d policy.Decision) {
 	})
 }
 
+// logAction records the executor result after a mutating call (or its error).
 func (r *Runner) logAction(st *runState, action string, result any, err error) {
 	if err != nil {
 		st.log.Emit("action_error", map[string]any{"action": action, "error": err.Error()})
@@ -946,6 +974,8 @@ func (r *Runner) logAction(st *runState, action string, result any, err error) {
 	st.log.Emit("action_executed", map[string]any{"action": action, "result": result})
 }
 
+// execRepro is the sandbox call site. Tests replace reproExec with a panic
+// to prove ValidateReproBundle sits in front (injection_test.go).
 func (r *Runner) execRepro(bundle *repro.ReproBundle) (*sandbox.ReproResult, error) {
 	if r.reproExec != nil {
 		return r.reproExec(bundle)
@@ -964,6 +994,9 @@ func (r *Runner) reproIfAllowed(bundle *repro.ReproBundle) (*sandbox.ReproResult
 	return res, "", err
 }
 
+// reproLimits overlays config caps on DefaultLimits. Zero/empty config
+// fields keep the issue-template dropdown defaults so an omitted YAML key
+// cannot widen the version allowlist.
 func reproLimits(cfg *policy.Config) repro.Limits {
 	l := repro.DefaultLimits()
 	if cfg != nil && cfg.Repro.MaxYAMLBytes > 0 {
@@ -982,6 +1015,8 @@ func reproTimeout(cfg *policy.Config) time.Duration {
 	return 300 * time.Second
 }
 
+// summarizeResults is the audit projection: pass/fail/duration only, not
+// the log tail (untrusted sandbox output stays out of policy_decision lines).
 func summarizeResults(rs []sandbox.StageResult) []map[string]any {
 	var out []map[string]any
 	for _, r := range rs {

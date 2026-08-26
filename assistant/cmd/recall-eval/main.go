@@ -133,6 +133,8 @@ func runSandbox(r *sandbox.Runner, tmap *intel.TestMap, files, catalog []string,
 	return ov, extra
 }
 
+// infraFailure is a missing binary / image, not a test assertion. Overlaying
+// these as needed-set hits would inflate recall with "docker had no chainsaw".
 func infraFailure(s sandbox.StageResult) bool {
 	log := strings.ToLower(s.LogTail)
 	if s.ExitCode == 127 {

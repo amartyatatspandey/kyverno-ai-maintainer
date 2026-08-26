@@ -179,6 +179,8 @@ func loadRecallCache(path string) *intel.GroundTruth {
 	return &gt
 }
 
+// firstFailedRule is the eval "why DENY" column. First fail wins, matching
+// Evaluate's short-circuit — later passing rules are not a second verdict.
 func firstFailedRule(d policy.Decision) string {
 	for _, r := range d.Rules {
 		if !r.Pass {

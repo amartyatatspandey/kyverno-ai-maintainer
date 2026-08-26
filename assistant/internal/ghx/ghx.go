@@ -13,12 +13,17 @@ import (
 	"github.com/amartyatatspandey/kyverno-ai-maintainer/internal/policy"
 )
 
+// Client talks to GitHub through the `gh` CLI. It is the sole credential
+// holder (TRUST_MODEL Zone T executor). Reads need no Decision; mutations
+// all go through requireAllow.
 type Client struct {
 	Repo   string // "owner/name"
 	DryRun bool
 	Dir    string // optional local checkout (git tag → date for changelogs)
 }
 
+// run shells out to `gh`. This is the credential boundary: gh uses the
+// process environment / gh auth; nothing in this repo holds a token (S3).
 func run(args ...string) ([]byte, error) {
 	out, err := exec.Command("gh", args...).CombinedOutput()
 	if err != nil {
@@ -73,6 +78,8 @@ func (c *Client) GetPRFacts(number int) (*policy.PRFacts, string, error) {
 	return prFactsFromView(v), v.Body, nil
 }
 
+// prFactsFromView copies structured fields only. Body stays on the return
+// of GetPRFacts so it cannot land in policy.PRFacts (no free-text fields).
 func prFactsFromView(v prView) *policy.PRFacts {
 	f := &policy.PRFacts{
 		Number: v.Number, Title: v.Title, State: v.State,
@@ -265,7 +272,9 @@ type workflowRunRow struct {
 }
 
 // GetCheckRunHistory lists per-job conclusions for a named workflow over
-// `days`. Job names embed the chainsaw suite (see intel.SuiteFromJobName).
+// `days`. Defaults to "Conformance tests" — that workflow is post-merge
+// (`push` to main), which is the flake-history signal; PR checks no longer
+// run the matrix (BASELINE.md 2026-08-26).
 func (c *Client) GetCheckRunHistory(workflowName string, days int) ([]CheckRunRecord, error) {
 	if workflowName == "" {
 		workflowName = "Conformance tests"
@@ -376,6 +385,8 @@ func normalizeBot(login string, isBot bool) string {
 	return login
 }
 
+// summarizeChecks fail-closes: zero checks ⇒ pending, never green. A missing
+// statusCheckRollup must not look like a passing PR.
 func summarizeChecks(checks []struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
@@ -397,6 +408,8 @@ func summarizeChecks(checks []struct {
 	return green && !pending, pending
 }
 
+// IssueView is the read-only issue payload. Body is untrusted text and must
+// not be copied into policy.IssueFacts (integers/labels/state only).
 type IssueView struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -407,6 +420,8 @@ type IssueView struct {
 	} `json:"labels"`
 }
 
+// GetIssue fetches issue facts for triage/repro. Body stays on this type,
+// not on policy.IssueFacts.
 func (c *Client) GetIssue(number int) (*IssueView, error) {
 	out, err := run("issue", "view", fmt.Sprint(number), "-R", c.Repo, "--json", "number,title,body,state,labels")
 	if err != nil {
@@ -416,7 +431,10 @@ func (c *Client) GetIssue(number int) (*IssueView, error) {
 	return &v, json.Unmarshal(out, &v)
 }
 
-// KillSwitchActive reads the repo variable fresh.
+// KillSwitchActive reads the repo variable fresh (not cached on the Runner).
+// A missing variable is treated as off — fail-open on the pause signal so a
+// first-time fork without AI_MAINTAINER_PAUSED still runs; the label hold
+// path is the other kill switch and is fail-closed when present.
 func (c *Client) KillSwitchActive(variable string) bool {
 	out, err := run("variable", "get", variable, "-R", c.Repo, "--json", "value", "-q", ".value")
 	if err != nil {
@@ -465,6 +483,8 @@ type gqlDiscussion struct {
 	} `json:"comments"`
 }
 
+// discussionFacts is structured only (number/category/answered). The body
+// stays off this type so it cannot reach policy.Context.
 func discussionFacts(n gqlDiscussion) policy.DiscussionFacts {
 	human := n.Answer != nil
 	if !human {
@@ -480,6 +500,8 @@ func discussionFacts(n gqlDiscussion) policy.DiscussionFacts {
 	}
 }
 
+// authorIsHuman treats missing __typename as human so a GraphQL partial
+// cannot mark a maintainer comment as bot and skip the "already answered" gate.
 func authorIsHuman(typeName, login string) bool {
 	if strings.EqualFold(typeName, "Bot") || strings.HasSuffix(strings.ToLower(login), "[bot]") {
 		return false
@@ -573,6 +595,9 @@ func (c *Client) GetDiscussion(number int) (*policy.DiscussionFacts, string, err
 
 // ---- mutations (Decision required; fail closed) ----
 
+// requireAllow is the executor-side copy of deny-by-default: even if a caller
+// forgets Evaluate, a nil or DENY Decision cannot reach GitHub (invariant 1).
+// TTL expiry is a second TOCTOU belt (P4) on top of BoundSHA.
 func (c *Client) requireAllow(d *policy.Decision, action string) error {
 	if d == nil || !d.Allowed {
 		return fmt.Errorf("SAFETY: %s attempted without ALLOW decision — refusing (fail closed)", action)
@@ -593,6 +618,8 @@ func (c *Client) UpsertComment(d *policy.Decision, kind string, number int, mark
 		return "(dry-run) would upsert comment on " + fmt.Sprint(number), nil
 	}
 	// Find existing comment with marker.
+	// TODO(reviewer): listing comments ignores errors, so a failed list
+	// falls through to POST and can create a duplicate (G5).
 	out, _ := run("api", fmt.Sprintf("repos/%s/issues/%d/comments?per_page=100", c.Repo, number),
 		"--jq", `[.[] | {id, body}]`)
 	var comments []struct {
@@ -649,6 +676,8 @@ func (c *Client) PostDiscussionComment(d *policy.Decision, number int, body stri
 	return "created discussion comment", err
 }
 
+// SetLabels mutates issue/PR labels. Fail-closed without ALLOW. Policy has
+// already filtered denylist labels; this method does not re-check names.
 func (c *Client) SetLabels(d *policy.Decision, number int, add, remove []string) (string, error) {
 	if err := c.requireAllow(d, "set_labels"); err != nil {
 		return "", err

@@ -169,6 +169,8 @@ func (idx *DocsIndex) TopMatches(query string, k int) ([]DocSnippet, error) {
 	return out, nil
 }
 
+// tokenize is keyword splitting only. A discussion jailbreak is just more
+// tokens in the query — it cannot rewrite the indexed corpus.
 func tokenize(s string) []string {
 	var b strings.Builder
 	var out []string

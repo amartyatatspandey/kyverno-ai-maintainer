@@ -5,7 +5,9 @@ import (
 	"strings"
 )
 
-// Render produces the maintainer-facing "audit show" view (AUDIT.md sample).
+// Render produces the maintainer-facing `audit show` view (AUDIT.md). It is
+// a projection of the JSONL, not a second log — replay always comes from
+// events.jsonl so this cannot diverge from what was write-ahead recorded.
 func Render(events []Event) string {
 	var b strings.Builder
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format+"\n", a...) }
@@ -34,6 +36,7 @@ func Render(events []Event) string {
 			}
 			w("  POLICY %v → %s  [bound to %v]", ev.Data["action"], verdict, ev.Data["bound_sha"])
 			if rules, ok := ev.Data["rules"].([]any); ok {
+				// JSONL unmarshals the rule slice as []any, not []RuleResult.
 				for _, r := range rules {
 					rm, _ := r.(map[string]any)
 					mark := "✓"
@@ -65,6 +68,8 @@ func Render(events []Event) string {
 
 func compact(v any) string { return truncate(fmt.Sprint(v), 220) }
 
+// truncate keeps a terminal-sized line. Untrusted bodies live in Data and
+// must not flood `audit show` (or a shared screen during a demo).
 func truncate(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	if len(s) > n {

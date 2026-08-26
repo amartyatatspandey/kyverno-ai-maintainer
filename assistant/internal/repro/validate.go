@@ -22,6 +22,8 @@ const defaultMaxYAMLBytes = 64 * 1024 // 64KB
 // (bug-webhook.yaml / bug-cli.yaml). The sandbox only has images for these.
 var DefaultAllowedVersions = []string{"1.16.4", "1.17.2", "1.18.0"}
 
+// DefaultLimits matches the issue-template dropdown. Unknown versions are
+// rejected — the sandbox never interpolates a user string into an image ref.
 func DefaultLimits() Limits {
 	return Limits{MaxYAMLBytes: defaultMaxYAMLBytes, AllowedVersions: append([]string{}, DefaultAllowedVersions...)}
 }

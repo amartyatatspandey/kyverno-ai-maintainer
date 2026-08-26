@@ -13,6 +13,8 @@ const decisionTTL = 60 * time.Second
 // Engine evaluates actions against the config. It is pure: no I/O, no LLM.
 type Engine struct{ cfg *Config }
 
+// NewEngine wraps a loaded Config. The engine stays I/O-free; callers
+// (runtime, MCP, eval) fetch facts and fill Context before Evaluate.
 func NewEngine(cfg *Config) *Engine { return &Engine{cfg: cfg} }
 
 // Evaluate runs the full rule order (POLICY_ENGINE.md). First DENY wins;
@@ -129,6 +131,8 @@ func (e *Engine) Evaluate(a Action, ctx Context) Decision {
 	return d
 }
 
+// githubOp maps specialized comment_* action ids onto the workflow's
+// "comment" github_op. github_ops lists the capability, not every template.
 func githubOp(actionType string) string {
 	switch actionType {
 	case ActionCommentDCOGuidance, ActionCommentWelcome, ActionCommentReviewerSuggestion, ActionCommentDigest, ActionCommentFlakyReport, ActionCommentDocsGap, ActionAnswerDiscussion:
@@ -138,6 +142,8 @@ func githubOp(actionType string) string {
 	}
 }
 
+// commentBudget is per-entity so a looping webhook cannot flood one PR
+// even if the daily merge budget still has room.
 func (e *Engine) commentBudget(add func(string, bool, string) bool, ctx Context) bool {
 	return add("comment_budget", ctx.Counters.CommentsTodayEntity < e.cfg.RateLimits.CommentsPerEntityPerDay,
 		fmt.Sprintf("%d/%d today on entity", ctx.Counters.CommentsTodayEntity, e.cfg.RateLimits.CommentsPerEntityPerDay))
@@ -283,6 +289,10 @@ func isYAML(f string) bool {
 	return strings.HasSuffix(strings.ToLower(f), ".yaml") || strings.HasSuffix(strings.ToLower(f), ".yml")
 }
 
+// mergeRules is the W1 auto-merge gate (POLICY_ENGINE.md). Protected paths
+// are checked before the changed-files allowlist so a go.mod+engine.go PR
+// cannot sneak past as "mostly lockfile". no_competing_pr (G7) is last of
+// the content checks: CompetingPRs is a caller-filled []int, never text.
 func (e *Engine) mergeRules(d *Decision, add func(string, bool, string) bool, ctx Context) bool {
 	pr := ctx.PR
 	if !add("pr_context_present", pr != nil, "merge requires PR facts") {
@@ -344,6 +354,9 @@ func formatPRNums(nums []int) string {
 	return strings.Join(parts, ", ")
 }
 
+// labelRules is a structural allow/deny on names, not a model judgment.
+// Privileged labels (security, …) live on the denylist so injection I5
+// cannot apply them even if the LLM proposes them.
 func (e *Engine) labelRules(d *Decision, add func(string, bool, string) bool, a Action, ctx Context) bool {
 	adds, _ := a.Params["add"].([]string)
 	removes, _ := a.Params["remove"].([]string)

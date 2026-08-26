@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// Runner is the docker isolation config. Image is a tag in the POC; production
+// should pin a digest so a registry swap cannot change what runs (SANDBOX.md).
 type Runner struct {
 	Image        string        // pinned digest in production; tag for POC
 	RepoDir      string        // read-only bind mount of the pinned checkout
@@ -21,6 +23,8 @@ type Runner struct {
 	ReproTimeout time.Duration // cap for RunRepro; default 300s
 }
 
+// StageResult is what leaves the container. LogTail is already bounded so
+// a noisy test cannot flood the audit log or a GitHub comment (I9).
 type StageResult struct {
 	Target   string        `json:"target"`
 	ExitCode int           `json:"exit_code"`
@@ -32,6 +36,8 @@ type StageResult struct {
 // LintResult is the policy-lint stage result; same shape as unit-test stages.
 type LintResult = StageResult
 
+// Available is a docker-daemon probe. A false result is a skip, not a test
+// failure — recall-eval must not overlay "binary not found" as suite misses.
 func Available() bool {
 	return exec.Command("docker", "info").Run() == nil
 }
@@ -42,6 +48,8 @@ func Available() bool {
 // uses the official CLI image with the same isolation flags as RunUnitTests.
 const PolicyLintImage = "ghcr.io/kyverno/kyverno-cli:latest"
 
+// isolationArgs is the shared deny-by-default container spec: no network,
+// read-only root, tmpfs scratch, RO checkout mount, no credentials.
 func (r *Runner) isolationArgs(image string, extraEnv, extraTmpfs []string) []string {
 	args := []string{
 		"run", "--rm",
@@ -60,6 +68,8 @@ func (r *Runner) isolationArgs(image string, extraEnv, extraTmpfs []string) []st
 	return args
 }
 
+// runContainer always goes through isolationArgs — there is no free-form
+// docker run path a caller can supply.
 func (r *Runner) runContainer(ctx context.Context, timeout time.Duration, image string, extraEnv, extraTmpfs, cmd []string) ([]byte, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -131,6 +141,8 @@ func chainsawCommand(suite string) ([]string, error) {
 	return []string{"chainsaw", "test", "--test-dir", "test/conformance/chainsaw/" + suite}, nil
 }
 
+// validSuiteName rejects path traversal so a mapped suite string cannot
+// escape test/conformance/chainsaw/.
 func validSuiteName(suite string) error {
 	if suite == "" || strings.Contains(suite, "..") {
 		return fmt.Errorf("invalid chainsaw suite %q", suite)

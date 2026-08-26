@@ -66,6 +66,9 @@ func main() {
 	}
 }
 
+// cmdRun is the CLI adapter onto the same Runner entrypoints the webhook
+// uses. Dry-run defaults true so a first `assistant run --pr N` cannot
+// mutate GitHub without an explicit --dry-run=false.
 func cmdRun(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	pr := fs.Int("pr", 0, "pull request number")
@@ -130,6 +133,8 @@ func cmdRun(args []string) {
 	}
 }
 
+// cmdServe is the GitHub webhook adapter. The secret is env-only so it
+// never lands in `ps` / shell history (same honesty as ghx not holding a token).
 func cmdServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	port := fs.Int("port", 8080, "listen port")
@@ -177,6 +182,8 @@ func cmdServe(args []string) {
 	}
 }
 
+// cmdMCP is a new transport, not a new authority: Host.Engine is the same
+// policy.Engine the CLI constructs. Mutating tools still Evaluate then ghx.
 func cmdMCP(args []string) {
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
 	repo := fs.String("repo", envOr("AI_REPO", "amartyatatspandey/kyverno"), "owner/name")
@@ -299,6 +306,7 @@ func cmdDraftReleaseNotes(args []string) {
 	fmt.Fprintf(os.Stderr, "wrote %s\n", *outPath)
 }
 
+// cmdAudit is a read of events.jsonl. It cannot re-authorize a past ALLOW.
 func cmdAudit(args []string) {
 	if len(args) == 0 {
 		usage()

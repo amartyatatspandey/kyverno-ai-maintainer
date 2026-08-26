@@ -9,6 +9,9 @@ import (
 
 const defaultFlakeThreshold = 0.15
 
+// FlakyCandidate is a suite whose history looks like a flake, not a
+// monotonic broken-then-fixed streak. The assistant comments these; it
+// never writes quarantined-tests (T2).
 type FlakyCandidate struct {
 	Suite             string
 	FailureRate       float64
@@ -87,6 +90,9 @@ func DetectFlaky(records []ghx.CheckRunRecord, threshold float64) ([]FlakyCandid
 	return out, nil
 }
 
+// jobFlakeSignal is true if the same SHA both failed and passed (classic
+// flake) or fail/pass are interleaved. A clean fail-then-pass streak is a
+// fix, not a flake — quarantining that would hide a real regression.
 func jobFlakeSignal(recs []ghx.CheckRunRecord) bool {
 	type shaPair struct{ fail, pass bool }
 	bySHA := map[string]*shaPair{}

@@ -21,6 +21,8 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`sk-[A-Za-z0-9-]{20,}`),
 }
 
+// Scrub is belt-and-braces on top of structural no-secrets. Audit JSONL is
+// the last place a token could leak; this runs before every write.
 func Scrub(s string) string {
 	for _, re := range secretPatterns {
 		s = re.ReplaceAllString(s, "[REDACTED]")
@@ -28,6 +30,8 @@ func Scrub(s string) string {
 	return s
 }
 
+// Event is one JSONL line. Data must stay structured facts — untrusted
+// bodies belong under known keys so Render can truncate them.
 type Event struct {
 	RunID string         `json:"run_id"`
 	Seq   int            `json:"seq"`
@@ -36,6 +40,8 @@ type Event struct {
 	Data  map[string]any `json:"data,omitempty"`
 }
 
+// Log is the write-ahead handle. Emit fsyncs before the executor runs so a
+// crash after GitHub mutation still has the decision on disk (AUDIT.md).
 type Log struct {
 	mu    sync.Mutex
 	f     *os.File
@@ -74,6 +80,8 @@ func (l *Log) Emit(typ string, data map[string]any) {
 	l.f.Sync()
 }
 
+// Finish writes run_finished then summary.json. The JSONL is the source of
+// truth; summary.json is a convenience for `audit show`, not a second log.
 func (l *Log) Finish(outcome string, totals map[string]any) {
 	data := map[string]any{"outcome": outcome}
 	for k, v := range totals {

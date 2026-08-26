@@ -21,11 +21,15 @@ type mapEntry struct {
 	Suites []string `yaml:"suites"`
 }
 
+// TestMap is the checked-in path→suite table. Selection is deterministic
+// longest-prefix — the LLM may only WIDEN (RISKS A6), never edit this file.
 type TestMap struct {
 	Version int                 `yaml:"version"`
 	Paths   map[string]mapEntry `yaml:"paths"`
 }
 
+// Selection is what the sandbox will run. FullFallback means unmapped paths
+// were present — conservative: run everything rather than miss a suite.
 type Selection struct {
 	UnitPackages  []string `json:"unit_packages"`
 	Suites        []string `json:"suites"`
@@ -33,6 +37,8 @@ type Selection struct {
 	FullFallback  bool     `json:"full_fallback"` // unmapped files => run everything
 }
 
+// LoadMap fails closed: an unreadable map is a global halt, same honesty as
+// an unreadable policy config (invariant 2).
 func LoadMap(path string) (*TestMap, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

@@ -16,6 +16,8 @@ type workflowRate struct {
 	Rate float64
 }
 
+// digestSnapshot is computed from GitHub facts only — no LLM — so the
+// weekly dashboard cannot be prompt-injected via an issue body.
 type digestSnapshot struct {
 	Week           string
 	OpenPRs        int
@@ -25,6 +27,9 @@ type digestSnapshot struct {
 	TopFailures    []workflowRate
 }
 
+// isoWeekTarget is the policy Target for the weekly digest. One ALLOW per
+// ISO week, not per calendar day — re-running Monday's cron does not post
+// a second comment (G5 upsert uses the same marker).
 func isoWeekTarget(t time.Time) string {
 	y, w := t.ISOWeek()
 	return fmt.Sprintf("digest/%d-W%02d", y, w)
@@ -35,6 +40,8 @@ func isoWeekLabel(t time.Time) string {
 	return fmt.Sprintf("%d-W%02d", y, w)
 }
 
+// medianAgeDays skips PRs with a zero CreatedAt (API omitted the field)
+// rather than treating them as age 0, which would pull the median down.
 func medianAgeDays(prs []policy.PRFacts, now time.Time) float64 {
 	var ages []float64
 	for _, p := range prs {
@@ -54,6 +61,8 @@ func medianAgeDays(prs []policy.PRFacts, now time.Time) float64 {
 	return (ages[n/2-1] + ages[n/2]) / 2
 }
 
+// countChecksNotGreen is a dashboard metric, not a merge gate — merge still
+// re-fetches ChecksGreen on that PR (fetch-fresh).
 func countChecksNotGreen(prs []policy.PRFacts) int {
 	n := 0
 	for _, p := range prs {

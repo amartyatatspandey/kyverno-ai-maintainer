@@ -151,6 +151,8 @@ func (h *Host) getAffectedTests(ctx context.Context, _ *mcp.CallToolRequest, in 
 	return textJSON(sel)
 }
 
+// comment evaluates, then upserts. The MCP client supplies the body; policy
+// still gates the *action*. Body is not a policy input (no free-text fields).
 func (h *Host) comment(ctx context.Context, _ *mcp.CallToolRequest, in commentIn) (*mcp.CallToolResult, any, error) {
 	log := h.beginAudit(in.Entity, in.Number, ToolComment)
 	defer h.endAudit(log, "completed")
@@ -175,6 +177,8 @@ func (h *Host) comment(ctx context.Context, _ *mcp.CallToolRequest, in commentIn
 	return textJSON(map[string]any{"result": res})
 }
 
+// setLabels evaluates with the add/remove names in Params so the denylist
+// can strip privileged labels before ghx.SetLabels runs.
 func (h *Host) setLabels(ctx context.Context, _ *mcp.CallToolRequest, in labelsIn) (*mcp.CallToolResult, any, error) {
 	log := h.beginAudit("pr", in.Number, ToolSetLabels)
 	defer h.endAudit(log, "completed")
@@ -202,6 +206,8 @@ func (h *Host) setLabels(ctx context.Context, _ *mcp.CallToolRequest, in labelsI
 	return textJSON(map[string]any{"result": res})
 }
 
+// mergePR runs the full W1 gate (same mergeRules as `assistant run --pr`).
+// expected_head_sha is an extra TOCTOU belt on top of Decision.BoundSHA (G2).
 func (h *Host) mergePR(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) (*mcp.CallToolResult, any, error) {
 	log := h.beginAudit("pr", in.Number, ToolMergePR)
 	defer h.endAudit(log, "completed")
@@ -229,6 +235,10 @@ func (h *Host) mergePR(ctx context.Context, _ *mcp.CallToolRequest, in mergeIn) 
 	return textJSON(map[string]any{"result": res, "bound_sha": d.BoundSHA})
 }
 
+// entityContext is a thinner Context than the CLI run loop: MCP comment on
+// an issue does not fetch labels. Hold/ai-hold therefore cannot fire here.
+// TODO(reviewer): fetch GetIssue labels (and kill switch) so MCP comments
+// on a held issue fail closed the same way `assistant run --issue` does.
 func (h *Host) entityContext(kind string, number int) (policy.Context, error) {
 	if kind == "issue" {
 		return policy.Context{
@@ -240,6 +250,8 @@ func (h *Host) entityContext(kind string, number int) (policy.Context, error) {
 	return h.workflowContext("dependency_prs", number)
 }
 
+// workflowContext fetch-fresh PR facts and classifies the title the same
+// way the CLI does (ClassifyUpdateType, never the body).
 func (h *Host) workflowContext(workflow string, number int) (policy.Context, error) {
 	pr, _, err := h.GH.GetPRFacts(number)
 	if err != nil {
@@ -258,6 +270,9 @@ func (h *Host) workflowContext(workflow string, number int) (policy.Context, err
 	}, nil
 }
 
+// beginAudit is best-effort: a disk error returns nil so the tool still
+// evaluates policy. Missing audit is a POC honesty gap (AUDIT.md hash-chain
+// is the production follow-up), not a second authority.
 func (h *Host) beginAudit(kind string, number int, tool string) *audit.Log {
 	if h.AuditDir == "" {
 		return nil
